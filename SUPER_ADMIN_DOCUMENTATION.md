@@ -57,6 +57,7 @@
 47. [Security Monitoring & Incident Response](#47-security-monitoring--incident-response)
 48. [Compliance Framework Alignment](#48-compliance-framework-alignment)
 49. [Future Security Roadmap](#49-future-security-roadmap)
+50. [Live Implementation Reference — EHS SuperAdmin](#50-live-implementation-reference--ehs-superadmin)
 - [Appendix: Placeholder Reference](#appendix-placeholder-reference)
 
 ---
@@ -3445,9 +3446,527 @@ These are **not required for standard enterprise** but may apply to government o
 
 ---
 
+## 50. Live Implementation Reference — EHS SuperAdmin
+
+| Status | Priority | Category |
+|--------|----------|----------|
+| Done | Critical | Reference Implementation |
+
+> This section documents the **actual implemented features** from the EHS ISO ISMS SuperAdmin dashboard at `https://audit.ceruleaninfotech.com/superadmin-lala`. It serves as a real-world reference for how the template sections above translate into a working production system.
+
+### 50.1 Implementation Overview
+
+| Field | Value |
+|-------|-------|
+| URL | `/superadmin-lala` (Next.js App Router) |
+| Framework | Next.js 15 (App Router) |
+| Authentication | NextAuth.js session + `ADMIN` role check |
+| API Route | `/api/admin/superadmin` (GET sections, POST actions) |
+| Component | `src/components/superadmin/superadmin-dashboard.tsx` (4,172 lines) |
+| Data Fetching | Server-side parallel `Promise.all()` for initial load, client-side per-tab refresh |
+| Database | PostgreSQL via Prisma ORM |
+| Process Manager | PM2 (`iso-isms` process) |
+
+### 50.2 Dashboard Tab Inventory (13 Tabs — Implemented)
+
+| # | Tab ID | Label | Icon | Data Source | Status |
+|---|--------|-------|------|-------------|--------|
+| 1 | `health` | System Health | Activity | `getSystemHealth()` | Done |
+| 2 | `database` | Database | Database | `getDatabaseStats()` | Done |
+| 3 | `users` | Users & Security | Shield | `getUserSecurity()` | Done |
+| 4 | `activity` | User Activity | Eye | `/api/user/activity` | Done |
+| 5 | `audit` | Audit Analytics | FileText | `getAuditAnalytics()` | Done |
+| 6 | `environment` | Environment | Settings | `getEnvironmentConfig()` | Done |
+| 7 | `chatbot` | AI Chatbot | MessageSquare | `systemConfig` table | Done |
+| 8 | `storage` | Storage | HardDrive | `getStorageConfig()` + S3 client | Done |
+| 9 | `ocs` | OCS Servers | Monitor | `ocsServer` table | Done |
+| 10 | `gravityzone` | GravityZone | ShieldCheck | `gravityZoneServer` table | Done |
+| 11 | `modules` | Modules | Package | `systemConfig` (DISABLED_MODULES) | Done |
+| 12 | `bulkactions` | Bulk Actions | Layers | `/api/bulk-actions/history` | Done |
+| 13 | `datamanage` | Data Management | Trash2 | Assets + Acknowledgments | Done |
+
+### 50.3 Tab 1: System Health
+
+Real-time server health monitoring with live metrics.
+
+**Stat Cards:**
+
+| Card | Metric | Source |
+|------|--------|--------|
+| CPU Usage | Percentage + core count + model | `os.cpus()` |
+| Memory Usage | Used/Total + percentage | `os.totalmem()` / `os.freemem()` |
+| Disk Usage | Used/Total/Available + percentage | `df -h /` |
+| System Uptime | System + process uptime | `os.uptime()` / `process.uptime()` |
+
+**Collapsible Sections:**
+
+| Section | Content |
+|---------|---------|
+| CPU | Progress bar + load average (1m/5m/15m) |
+| Memory | Progress bar + RSS, heap used/total, external |
+| Disk | Progress bar + available space |
+| Database Connectivity | Health status (Connected/Disconnected) + latency in ms |
+| OS & Runtime | OS type, release, hostname, arch, Node.js version, app version |
+| PM2 Process | Process name, status badge, uptime, restart count, memory usage |
+
+**Color-coded progress bars:** Green (<70%), Yellow (70-90%), Red (>90%).
+
+### 50.4 Tab 2: Database Management
+
+Full PostgreSQL database administration panel.
+
+**Stat Cards:**
+
+| Card | Metric |
+|------|--------|
+| Database Size | Human-readable (e.g., "245 MB") |
+| Tables | Count of public schema tables |
+| Total Rows | Sum of all table row counts |
+| Connections | Active PostgreSQL connections |
+| Dead Tuples | Dead tuple count (vacuum indicator) |
+
+**Features:**
+
+| Feature | Description |
+|---------|-------------|
+| Download DB Backup | Full `pg_dump` backup, streamed as `.sql` file download |
+| S3 Automated Backups | Daily backups to S3/MinIO with 7-day retention (2:00 AM IST) |
+| Backup Now to S3 | On-demand S3 backup with old backup cleanup |
+| S3 Backup List | Table showing all backups with file name, size, and date |
+| All Tables View | Sortable table (name, rows, size) with sort direction toggles |
+| Prisma Migrations | Last 20 migrations with name, date, and Applied/Pending status |
+| Vacuum Info | Last vacuum/autovacuum timestamps per table |
+
+**Actions:**
+
+| Action | Confirmation | API Action |
+|--------|-------------|------------|
+| Download Backup | Dialog confirmation | `backup` + `CONFIRM_BACKUP` |
+| Backup to S3 | Button click | `backup_to_s3` |
+
+### 50.5 Tab 3: Users & Security
+
+Comprehensive user management with security controls.
+
+**Stat Cards:** Total Users, Active, Inactive, Locked
+
+**Sections:**
+
+| Section | Content |
+|---------|---------|
+| Role Distribution | Badges showing count per role (ADMIN, USER, etc.) |
+| Login Activity (24h) | Color-coded badges: LOGIN (green), LOGIN_FAILED (red), LOGOUT (gray) |
+| Locked Accounts | Table with name, email, locked-until timestamp + Unlock button |
+| Recent Failed Logins | Last 20 failed logins: entity, IP address, timestamp |
+| Stale Users (90+ days) | Users with no login in 90+ days: name, email, last login, role |
+| All Users | Full user table: name, email, role, department, last login, status, failed attempts, created |
+
+**User Actions:**
+
+| Action | Confirmation | Description |
+|--------|-------------|-------------|
+| Unlock User | Dialog | Resets `lockedUntil` and `failedLoginAttempts` to 0 |
+| Deactivate User | Dialog + `CONFIRM_DEACTIVATE` | Sets `isActive = false` |
+| Reset Password | Dialog + password input | Min 15 chars, confirmation match required |
+
+### 50.6 Tab 4: User Activity Tracking
+
+Page view analytics per user with time-period filtering.
+
+**Filters:** 7 days / 14 days / 30 days period selector
+
+**User Activity Summary Table:**
+
+| Column | Description |
+|--------|-------------|
+| User | Name + email |
+| Role | Role badge |
+| Page Views | Count of page views in period |
+| Time Spent | Total time formatted as h/m/s |
+| Last Active | Timestamp of last activity |
+| Most Visited | Most frequently visited page path |
+
+**Recent Page Views Table:**
+
+| Column | Description |
+|--------|-------------|
+| User | Name |
+| Page | Friendly-formatted path (e.g., `/dashboard` → "Dashboard") |
+| Duration | Time spent on page |
+| Time | Timestamp |
+| IP Address | Client IP |
+
+### 50.7 Tab 5: Audit Analytics
+
+Comprehensive audit log analysis with multi-tier deletion capabilities.
+
+**Stat Cards:** Total Audit Logs, Logs Today, Total Logins, Failed Login Rate (%)
+
+**Analysis Sections:**
+
+| Section | Content |
+|---------|---------|
+| Action Breakdown | Horizontal bar chart of each audit action type with relative widths |
+| Top 10 Active Users | Table: user name/email + action count |
+| Entity Type Breakdown | Table: entity/module type + count |
+| Recent Security Events | Color-coded: LOGIN_FAILED (red), SUPERADMIN_ACCESS (yellow), ROLE_CHANGED |
+
+**Activity Log Manager (Embedded Sub-Component):**
+
+| Feature | Description |
+|---------|-------------|
+| Paginated Browser | 25 logs per page with Previous/Next navigation |
+| Search | Filter by entity label, action, entity type, user name/email |
+| Action Filter | Dropdown populated from current page actions |
+| Module Filter | Dropdown for entity type filtering |
+| Select & Delete | Checkbox selection with bulk delete |
+| Delete All Logs | Safety confirmation requiring user to type "DELETE ALL" |
+
+**Three-Tier Deletion:**
+
+| Method | Confirmation | API Action |
+|--------|-------------|------------|
+| Purge by Age | Dialog (min 30, max 3650 days, default 365) | `purge_audit_logs` + `CONFIRM_PURGE` |
+| Delete Selected | Dialog showing selected count | `delete_audit_logs` + `CONFIRM_DELETE_LOGS` |
+| Delete All | Type "DELETE ALL" to confirm | `delete_all_audit_logs` + `CONFIRM_DELETE_ALL_LOGS` |
+
+### 50.8 Tab 6: Environment Configuration
+
+Read-only environment and dependency overview.
+
+**Sections:**
+
+| Section | Content |
+|---------|---------|
+| Application Config | NODE_ENV, NEXTAUTH_URL, NEXTAUTH_SECRET (masked), DATABASE_URL (masked), app version |
+| SMTP Configuration | SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_FROM_EMAIL, SMTP_USER — with configured/missing badges |
+| OCS Integration | OCS_API_URL, OCS_API_USER status |
+| Notification Config | NOTIFICATION_CRON_SCHEDULE, NOTIFICATION_CRON_ENABLED, Slack/Teams/Custom webhook status |
+| File Storage | File count + total size from `uploads/` directory |
+| Dependencies | All `package.json` dependencies with name + version in a grid layout |
+
+### 50.9 Tab 7: AI Chatbot Configuration
+
+Multi-provider AI chatbot management with 13 supported providers.
+
+**Supported Providers:**
+
+| Provider | Models | Tier |
+|----------|--------|------|
+| OpenAI | GPT-4o, GPT-4o-mini, GPT-4-turbo, GPT-3.5-turbo, o1-mini, o1-preview | Paid |
+| Anthropic Claude | Claude 3.5 Sonnet, Claude 3 Opus, Claude 3 Haiku | Paid |
+| Google Gemini | Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini Pro | Free tier available |
+| Groq | Llama 3.1 70B/8B, Mixtral 8x7B, Gemma 2 9B | Free |
+| Mistral AI | Mistral Large, Mistral Medium, Mistral Small, Codestral | Paid |
+| DeepSeek | DeepSeek Chat, DeepSeek Coder | Free |
+| OpenRouter | Auto (best), Claude 3.5 Sonnet, GPT-4o, Mixtral | Paid |
+| Together AI | Llama 3.1 70B/8B, Mixtral, CodeLlama 34B | Free tier available |
+| Perplexity | Llama 3.1 Sonar 70B/8B (online, with citations) | Paid |
+| xAI Grok | Grok Beta, Grok 2 | Paid |
+| Cohere | Command R+, Command R, Command Light | Free tier available |
+| Fireworks AI | Llama 3.1 70B/8B, Mixtral, FireFunction V2 | Free tier available |
+| Cerebras | Llama 3.1 70B/8B (fastest inference) | Free |
+
+**Features:**
+
+| Feature | Description |
+|---------|-------------|
+| Provider Selection | Visual card grid with radio selection |
+| Model Dropdown | Pre-configured model list per provider |
+| API Key Input | Masked input with show/hide toggle + link to provider's key page |
+| Test Connection | Verify API key works before saving |
+| Remove Config | Delete all AI settings with confirmation |
+| Status Display | Shows active provider, model, and masked key when configured |
+
+**Chatbot Capabilities:**
+- ISO 27001 domain knowledge
+- Streaming responses
+- Per-user conversation persistence
+- Max 2048 tokens per response
+- Last 16 messages context window
+
+**API Actions:** `save_ai_key`, `test_ai_key`, `delete_ai_key`
+
+### 50.10 Tab 8: S3/MinIO Storage Configuration
+
+Object storage management with local-to-S3 migration support.
+
+**Status Display:**
+
+| Field | Description |
+|-------|-------------|
+| Connection Status | Connected (S3/MinIO) or Local Disk |
+| Endpoint | S3-compatible endpoint URL |
+| Bucket | Target bucket name |
+| Path Prefix | Object key prefix |
+| Evidence Files | Count of evidence records in database |
+| Total Size | Aggregate file size |
+| Local Files | Count of files still on local disk |
+
+**Configuration Form:**
+
+| Field | Default | Required |
+|-------|---------|----------|
+| Endpoint URL | `http://100.91.171.68:9000` | Yes |
+| Bucket Name | `isms-evidence` | Yes |
+| Access Key | — | Yes |
+| Secret Key | — | Yes (masked, re-enter to change) |
+| Region | `us-east-1` | No |
+| Path Prefix | `evidence` | No |
+
+**Actions:**
+
+| Action | Description |
+|--------|-------------|
+| Save Configuration | Saves S3 config + auto-creates bucket via `ensureBucket()` |
+| Test Connection | Verifies S3 connectivity |
+| Remove Config | Reverts to local disk storage |
+| Migrate Files to S3 | Moves all local files to S3 with per-file progress, updates DB paths, deletes local copies |
+
+**Migration Flow:**
+```
+For each local file in uploads/evidence/:
+  1. Read file from disk
+  2. Lookup evidence record for moduleType
+  3. Upload to S3: {prefix}/{moduleType}/{filename}
+  4. Update evidence.filePath in database
+  5. Delete local file
+  6. Report: migrated N/total, errors[]
+```
+
+### 50.11 Tab 9: OCS Inventory Servers
+
+Multi-server OCS Inventory NG management for IT asset discovery.
+
+**Server List Table:**
+
+| Column | Description |
+|--------|-------------|
+| Name | Server name (with star icon if default) |
+| API URL | OCS Inventory REST API endpoint |
+| Status | Enabled/Disabled badge |
+| Assets | Count of assets linked to this server |
+
+**CRUD Operations:**
+
+| Action | Fields | Confirmation |
+|--------|--------|-------------|
+| Add Server | Name, API URL, Username, Password, Enabled, Set Default | — |
+| Edit Server | Same fields (password optional — keeps current if blank) | — |
+| Test Connection | Tests API connectivity, returns computer count | — |
+| Delete Server | — | Dialog: "Assets will be unlinked but not deleted" |
+
+**Special Features:**
+- Default server designation (only one at a time, auto-unsets others)
+- Password masking (first 4 chars + `****` in API responses)
+- Connection test shows: "Connected — N computers found"
+- Assets are unlinked (FK nullified), not deleted when server is removed
+
+### 50.12 Tab 10: Bitdefender GravityZone Integration
+
+Endpoint protection management via GravityZone API.
+
+**Server List Table:**
+
+| Column | Description |
+|--------|-------------|
+| Name | Server name (with star icon if default) |
+| Access URL | GravityZone Control Center URL |
+| Status | Enabled/Disabled badge |
+| Last Sync | Timestamp of last endpoint sync |
+
+**CRUD Operations:**
+
+| Action | Description |
+|--------|-------------|
+| Add Server | Name, Access URL, API Key (HTTP Basic Auth) |
+| Edit Server | Same fields (API key optional — keeps current if blank) |
+| Test Connection | Returns: "Connected — N endpoints found" |
+| Sync | Pull endpoint protection data, match to assets |
+| Delete Server | Remove server configuration |
+
+**Sync Results:**
+
+| Metric | Description |
+|--------|-------------|
+| Total Endpoints | Endpoints scanned from GravityZone |
+| Matched to Assets | Endpoints matched to existing asset records |
+| Protection Updated | Endpoint protection status records updated |
+| Unmatched | Endpoints with no matching asset (expandable list of names) |
+
+### 50.13 Tab 11: Module Management
+
+Dynamic sidebar/navigation module visibility control.
+
+**17 Module Groups (~80+ Sub-Modules):**
+
+| # | Group | Key | Sub-Modules |
+|---|-------|-----|-------------|
+| 1 | Risk & Compliance | risk | Risk Register, Risk Assessment, SoA, etc. |
+| 2 | Asset Management | assets | Asset Register, Hardware, Software, Network, etc. |
+| 3 | Documents & Records | documents | Policy Library, Document Templates, etc. |
+| 4 | Incidents & Response | incidents | Incident Tracker, Response Plans, etc. |
+| 5 | Audit & Assurance | audit | Internal Audit, Findings, CAPA, etc. |
+| 6 | HR Security | hr | Employee Records, Background Checks, etc. |
+| 7 | Security Training | training | Training Programs, Awareness, Certifications |
+| 8 | Access & Security | access | Access Reviews, Privilege Management, etc. |
+| 9 | SDLC & Configuration | sdlc | Secure Development, Code Review, Change Mgmt |
+| 10 | Encryption & Backup | encryption | Key Management, Backup Config, etc. |
+| 11 | Vulnerability Mgmt | vulnerability | Vulnerability Scanner, Patch Management, etc. |
+| 12 | Third Parties | thirdparty | Vendor Assessment, Supplier Contracts, etc. |
+| 13 | Physical & Environmental | physical | Facility Security, Environmental Controls |
+| 14 | Business Continuity | bcp | BCP Plans, DR Testing, Impact Analysis |
+| 15 | IT Operations | operations | Capacity Mgmt, Service Level Mgmt, etc. |
+| 16 | Project & Timesheet Mgmt | projects | Project Tracker, Timesheets |
+| 17 | Legacy Systems Archive | legacy | Archived/deprecated modules |
+
+**Features:**
+
+| Feature | Description |
+|---------|-------------|
+| Group Toggle | Enable/disable entire module group (switch control) |
+| Sub-Module Toggle | Enable/disable individual items within a group |
+| Enable All / Disable All | Bulk toggle buttons |
+| Auto-Save | Changes saved immediately on toggle (no save button needed) |
+| Disabled Group Indicator | Shows italic message when expanding a disabled group |
+| Badge Counter | Shows how many sub-modules are hidden per group |
+| Summary | "N of 17 groups enabled" + hidden sub-module count |
+
+**Storage:** `systemConfig` table, key `DISABLED_MODULES`, value: `{ disabledGroups: string[], disabledItems: string[] }`
+
+### 50.14 Tab 12: Bulk Actions
+
+Overview of bulk operation execution history.
+
+**Stat Cards:**
+
+| Card | Metric |
+|------|--------|
+| Custom Groups | Count of saved bulk action groups |
+| Total Executions | Count of all bulk action runs |
+| Last Execution | Timestamp of most recent run |
+
+**Recent Executions Table (Last 5):**
+
+| Column | Description |
+|--------|-------------|
+| Date | Execution timestamp |
+| Action | Action type badge |
+| User | Who ran it |
+| Records | Total records affected |
+
+**Navigation:** "Open Bulk Actions Center" button → `/bulk-actions` page for full CRUD.
+
+### 50.15 Tab 13: Data Management
+
+Bulk data cleanup for assets and policy acknowledgments.
+
+**Asset Management Section:**
+
+| Feature | Description |
+|---------|-------------|
+| Search | Filter by name, assetId, type |
+| Asset Table | Asset ID (mono), name, type badge, status badge, source (OCS Import/Manual), created date |
+| Select All | Checkbox for filtered results |
+| Bulk Delete | Delete selected assets with confirmation dialog showing asset list |
+
+**Asset Deletion Cascade:**
+```
+For each asset:
+  1. Delete endpointComplianceLog records
+  2. Delete endpointProtectionStatus records
+  3. Delete evidence records (moduleType: "assets")
+  4. Delete comments
+  5. Nullify vulnerability references
+  6. Delete asset (RiskAsset cascade-deletes automatically)
+```
+
+**Policy Acknowledgments Section:**
+
+| Feature | Description |
+|---------|-------------|
+| Search | Filter by document title/number, user name/email |
+| Status Filter | All / Pending / Acknowledged / Overdue |
+| Summary Stats | Total, Pending, Acknowledged, Overdue counts |
+| Acknowledgment Table | Document number + title, user + email, status badge, date |
+| Delete Selected | Bulk delete selected acknowledgments |
+| Delete All | Pre-go-live cleanup — deletes all acknowledgments + related notifications |
+
+**Confirmation Safety:**
+
+| Action | Confirmation Code |
+|--------|------------------|
+| Delete Assets | `CONFIRM_DELETE_ASSETS` |
+| Delete Acknowledgments | `CONFIRM_DELETE_ACKNOWLEDGMENTS` |
+| Delete All Audit Logs | `CONFIRM_DELETE_ALL_LOGS` |
+
+### 50.16 API Route Summary (Implemented)
+
+**GET Sections:**
+
+| Section Parameter | Returns |
+|-------------------|---------|
+| `health` | CPU, memory, disk, uptime, load avg, OS, Node.js, DB latency, PM2 status |
+| `database` | DB size, table list with row counts/sizes, connections, dead tuples, migrations |
+| `users` | User summary, role breakdown, locked accounts, stale users, failed logins, all users |
+| `audit` | Total logs, action breakdown, top users, entity types, security events, failed login rate |
+| `environment` | App config, SMTP, OCS, notifications, storage info, dependencies |
+| `chatbot` | AI provider, masked API key, model |
+| `storage` | S3 config status, evidence stats, local file count |
+| `ocs_servers` | OCS server list with masked passwords and asset counts |
+| `gz_servers` | GravityZone server list with masked API keys |
+| `audit_logs` | Paginated audit logs with search/filter (page, pageSize, action, entityType, search) |
+| `module_toggles` | Disabled groups and items arrays |
+| `backups_list` | S3 backup file list with sizes and dates |
+| _(no section)_ | Full refresh — all 5 core sections in parallel |
+
+**POST Actions:**
+
+| Action | Confirmation | Description |
+|--------|-------------|-------------|
+| `backup` | `CONFIRM_BACKUP` | Full pg_dump → download as .sql |
+| `backup_to_s3` | — | Automated S3 backup with retention |
+| `purge_audit_logs` | `CONFIRM_PURGE` | Delete logs older than N days |
+| `unlock_user` | — | Reset lockout for user |
+| `deactivate_user` | `CONFIRM_DEACTIVATE` | Set user isActive=false |
+| `save_ai_key` | — | Save AI provider + API key + model |
+| `test_ai_key` | — | Test AI API connectivity |
+| `delete_ai_key` | — | Remove AI configuration |
+| `save_storage_config` | — | Save S3/MinIO config + auto-create bucket |
+| `test_storage_connection` | — | Test S3 connectivity |
+| `delete_storage_config` | — | Remove S3 config, revert to local |
+| `migrate_to_s3` | — | Migrate local files to S3 |
+| `save_ocs_server` | — | Create/update OCS server |
+| `test_ocs_server` | — | Test OCS API connectivity |
+| `delete_ocs_server` | — | Delete OCS server (unlink assets) |
+| `save_gz_server` | — | Create/update GravityZone server |
+| `test_gz_server` | — | Test GravityZone API connectivity |
+| `delete_gz_server` | — | Delete GravityZone server |
+| `bulk_delete_assets` | `CONFIRM_DELETE_ASSETS` | Cascade-delete selected assets |
+| `bulk_delete_acknowledgments` | `CONFIRM_DELETE_ACKNOWLEDGMENTS` | Delete selected/all acknowledgments |
+| `delete_audit_logs` | `CONFIRM_DELETE_LOGS` | Delete selected audit log entries |
+| `delete_all_audit_logs` | `CONFIRM_DELETE_ALL_LOGS` | Wipe all audit logs |
+| `save_module_toggles` | — | Save disabled module groups/items |
+
+### 50.17 Key Implementation Patterns
+
+| Pattern | Implementation |
+|---------|---------------|
+| Server-Side Initial Load | `Promise.all()` of 5 queries in page.tsx (SSR) |
+| Client-Side Refresh | Per-tab fetch via `?section=` parameter |
+| Tab Persistence | Active tab saved in `localStorage` |
+| Collapsible Cards | Open/closed state persisted in `localStorage` per card |
+| Confirmation Safety | Multi-tier: dialog → typed confirmation → API confirmation code |
+| Secret Masking | API keys/passwords masked in responses (first N + `****` + last N) |
+| Cache Invalidation | `clearXxxCache()` called after every config change |
+| Error Handling | All actions return `{ success, errors[] }` for partial failure reporting |
+
+---
+
 > **Document End** — {PROJECT_NAME} Super Admin Documentation Template
 >
-> This document covers 49 sections with 120+ implementation items across 12 categories.
+> This document covers 50 sections with 130+ implementation items across 13 categories.
 > Use the master checklist (Section 45) to track core implementation progress.
 > Sections 46-49 cover additional security hardening, compliance, and future roadmap.
+> Section 50 documents the live EHS SuperAdmin implementation as a reference.
 > Replace all `{PLACEHOLDER}` values before deploying to a specific project.
