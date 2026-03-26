@@ -1,0 +1,29 @@
+Category,Table Name,Purpose,Tenant Scoped
+Core,tenants,Multi-tenant organizations,No
+Core,users,User accounts,Yes
+Core,sessions,Active user sessions (or Redis),Yes
+Core,invitations,Pending user invitations,Yes
+Security,user_mfa,TOTP secrets and backup codes,Yes
+Security,user_sso_providers,SSO provider linkage,Yes
+Security,token_blacklist,Revoked JWT tokens,No
+Security,ip_allowlist,Per-tenant IP allowlists,Yes
+Security,audit_logs,Immutable audit trail,Yes
+Security,user_logs,Login history and tracking,Yes
+Security,suspicious_activity,Threat detection records,Yes
+Analytics,api_metrics,Per-endpoint performance data,No
+Analytics,system_health,System resource snapshots,No
+Analytics,user_analytics,User engagement metrics,Yes
+License,licenses,License keys and subscription data,Yes
+License,license_keys,Key encryption details,Yes
+License,payments,Payment history,Yes
+License,invoices,Generated invoices,Yes
+Storage,documents,File metadata and references,Yes
+Storage,storage_config,Storage provider configuration,Yes
+Communication,email_templates,Email template definitions,Yes
+Communication,email_logs,Sent email history,Yes
+Communication,notifications,In-app notifications,Yes
+Communication,webhooks,Webhook configurations,Yes
+Communication,webhook_deliveries,Webhook delivery log,Yes
+Configuration,system_settings,System-wide configuration,Yes
+Configuration,feature_flags,Feature flag definitions,No
+Configuration,config_change_log,Configuration change history,Yes

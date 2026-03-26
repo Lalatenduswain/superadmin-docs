@@ -1,0 +1,54 @@
+Type,Feature,File Path
+Backend,Auth Router,{PATH_PREFIX}/routers/auth.ts
+Backend,Security Router,{PATH_PREFIX}/routers/security.ts
+Backend,User Router,{PATH_PREFIX}/routers/user.ts
+Backend,SMTP Router,{PATH_PREFIX}/routers/smtp.ts
+Backend,Monitoring Router,{PATH_PREFIX}/routers/monitoring.ts
+Backend,Analytics Router,{PATH_PREFIX}/routers/analytics.ts
+Backend,Database Router,{PATH_PREFIX}/routers/database.ts
+Backend,Webhook Router,{PATH_PREFIX}/routers/webhook.ts
+Backend,Config Router,{PATH_PREFIX}/routers/config.ts
+Backend,Rate Limiting,{PATH_PREFIX}/lib/rateLimit.ts
+Backend,Security Headers,{PATH_PREFIX}/middleware/security-headers.ts
+Backend,CSRF Middleware,{PATH_PREFIX}/middleware/csrf.ts
+Backend,IP Allowlist,{PATH_PREFIX}/middleware/ipAllowlist.ts
+Backend,Auth Middleware,{PATH_PREFIX}/middleware/auth.ts
+Backend,RLS Middleware,{PATH_PREFIX}/middleware/rls.ts
+Backend,Password Utilities,{PATH_PREFIX}/lib/password.ts
+Backend,MFA Utilities,{PATH_PREFIX}/lib/mfa.ts
+Backend,Session Management,{PATH_PREFIX}/lib/session.ts
+Backend,Audit Logger,{PATH_PREFIX}/lib/audit.ts
+Backend,Token Blacklist,{PATH_PREFIX}/lib/tokenBlacklist.ts
+Backend,RBAC Constants,{PATH_PREFIX}/constants/roles.ts
+Backend,Permission Constants,{PATH_PREFIX}/constants/permissions.ts
+Backend,Sanitization,{PATH_PREFIX}/lib/sanitize.ts
+Backend,Env Validation,{PATH_PREFIX}/lib/env-validation.ts
+Backend,CSRF Utility,{PATH_PREFIX}/lib/csrf.ts
+Backend,License Crypto,{PATH_PREFIX}/lib/license/crypto.ts
+Backend,Request Context,{PATH_PREFIX}/context.ts
+Backend,Middleware Stack,{PATH_PREFIX}/trpc.ts
+Frontend,Security Admin,{FRONTEND_PREFIX}/app/dashboard/admin/security/page.tsx
+Frontend,Audit Admin,{FRONTEND_PREFIX}/app/dashboard/admin/audit/page.tsx
+Frontend,User Admin,{FRONTEND_PREFIX}/app/dashboard/admin/users/page.tsx
+Frontend,System Config,{FRONTEND_PREFIX}/app/dashboard/admin/system/page.tsx
+Frontend,Integrations,{FRONTEND_PREFIX}/app/dashboard/admin/integrations/page.tsx
+Frontend,Storage Admin,{FRONTEND_PREFIX}/app/dashboard/admin/storage/page.tsx
+Frontend,Database Admin,{FRONTEND_PREFIX}/app/dashboard/admin/database/page.tsx
+Frontend,Analytics,{FRONTEND_PREFIX}/app/dashboard/admin/analytics/page.tsx
+Frontend,System Monitor,{FRONTEND_PREFIX}/app/dashboard/admin/system-monitor/page.tsx
+Frontend,API Performance,{FRONTEND_PREFIX}/app/dashboard/admin/api-performance/page.tsx
+Frontend,Inactive Users,{FRONTEND_PREFIX}/app/dashboard/admin/inactive-users/page.tsx
+Frontend,User Logs,{FRONTEND_PREFIX}/app/dashboard/admin/user-logs/page.tsx
+Frontend,MFA Management,{FRONTEND_PREFIX}/app/dashboard/admin/mfa/page.tsx
+Frontend,License Management,{FRONTEND_PREFIX}/app/dashboard/admin/license/page.tsx
+Frontend,Alert Rules,{FRONTEND_PREFIX}/app/dashboard/admin/alert-rules/page.tsx
+Frontend,Feature Flags,{FRONTEND_PREFIX}/app/dashboard/admin/feature-flags/page.tsx
+Frontend,CSRF Hook,{FRONTEND_PREFIX}/hooks/use-csrf.ts
+Config,Environment,.env / .env.example
+Config,Database Schema,prisma/schema.prisma or drizzle/schema.ts
+Config,Seed Data,prisma/seed.ts or scripts/seed.ts
+Config,Docker Compose,docker/docker-compose.yml
+Config,CI Workflow,.github/workflows/ci.yml
+Config,Security Workflow,.github/workflows/security.yml
+Config,Process Manager,ecosystem.config.js
+Config,Tunnel Config,/etc/cloudflared/config.yml

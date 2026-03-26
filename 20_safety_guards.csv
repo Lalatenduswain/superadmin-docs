@@ -1,0 +1,18 @@
+Guard Type,Action Protected,Description,Who Can Override
+Authorization,Role change,Cannot demote SUPER_ADMIN,No one
+Authorization,Role change,Cannot change own role,No one
+Authorization,Status toggle,Cannot change own status,No one
+Authorization,User delete,Cannot delete own account,No one
+Authorization,User delete,Cannot delete other SUPER_ADMINs,No one
+Data,User delete,Soft deletes only - preserves audit trail,SUPER_ADMIN (hard delete after 90 days)
+Authorization,MFA management,Admin cannot remove own MFA via admin UI,No one
+Confirmation,User delete,Confirmation dialog with user name,Admin
+Confirmation,Permanent delete,Must type DELETE to confirm,SUPER_ADMIN
+Confirmation,Clear all rate limits,Double confirmation required,Admin
+Confirmation,Force logout all,Confirmation with warning message,Admin
+Confirmation,Database restore,Must type database name to confirm,SUPER_ADMIN
+Confirmation,Kill switch,Double confirmation + reason required,Admin
+Data Protection,API responses,Passwords never returned in API responses,N/A
+Data Protection,API responses,API key only last 4 characters visible,N/A
+Data Protection,Audit logs,Audit records cannot be modified or deleted,N/A
+Data Protection,Cookies,Session tokens HttpOnly not accessible via JS,N/A

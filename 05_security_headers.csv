@@ -1,0 +1,11 @@
+Header,Value,Purpose
+X-Frame-Options,DENY,Clickjacking prevention
+X-Content-Type-Options,nosniff,MIME sniffing prevention
+X-XSS-Protection,1; mode=block,Legacy XSS filter
+Referrer-Policy,strict-origin-when-cross-origin,Data leak prevention
+Permissions-Policy,"camera=(), microphone=(), geolocation=(), interest-cohort=()",Browser feature restriction
+Strict-Transport-Security,max-age=31536000; includeSubDomains; preload,HSTS enforcement
+Cache-Control,"no-store, no-cache, must-revalidate",Sensitive data caching prevention
+X-Permitted-Cross-Domain-Policies,none,Flash/PDF cross-domain prevention
+Cross-Origin-Opener-Policy,same-origin,Prevent cross-origin attacks
+Cross-Origin-Resource-Policy,cross-origin,Control resource sharing

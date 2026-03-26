@@ -1,0 +1,9 @@
+Phase,Sections,Description,Estimated Effort,Priority Features
+1,1-5 and 8,Core auth sessions roles,2-3 weeks,Login JWT sessions RBAC
+2,4 7 12 14,Password sanitization headers RLS,1-2 weeks,bcrypt input validation security headers
+3,6 9-11 13 15,CSRF permissions rate limiting audit threats,2-3 weeks,CSRF TOTP rate limits audit logging
+4,16-18 39-40,Admin dashboard config guards,2-3 weeks,19 dashboard tabs system config safety guards
+5,3 19-21,MFA DB management monitoring,2-3 weeks,TOTP backup/restore health endpoints
+6,25-27 34,Email webhooks notifications import/export,2-3 weeks,SMTP webhooks alerts CSV import/export
+7,22-24 35-37,Analytics storage change log security tests,2-3 weeks,BI dashboard storage SAST/DAST
+8,28-33 38,Feature flags licensing SLA surveys org hierarchy,3-4 weeks,Feature flags license mgmt SLA compliance

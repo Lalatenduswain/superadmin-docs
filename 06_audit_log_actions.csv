@@ -1,0 +1,39 @@
+Category,Action,Description
+Authentication,LOGIN_SUCCESS,Successful user login
+Authentication,LOGIN_FAILURE,Failed login attempt
+Authentication,LOGOUT,User logout
+Authentication,LOGIN_LOCKED,Account lockout triggered
+Authentication,PASSWORD_CHANGE,Password modification
+Authentication,PASSWORD_RESET,Password reset requested
+Authentication,MFA_SETUP,MFA enabled on account
+Authentication,MFA_VERIFY,MFA code verified
+Authentication,MFA_DISABLE,MFA disabled
+User Management,USER_CREATE,New user registered
+User Management,USER_UPDATE,User profile changes
+User Management,USER_DELETE,User deleted (soft)
+User Management,USER_ACTIVATE,Account activated
+User Management,USER_DEACTIVATE,Account deactivated
+User Management,ROLE_CHANGE,Role modified
+User Management,USER_INVITE,User invitation sent
+User Management,USER_IMPORT,Bulk user import
+Entity Operations,ENTITY_CREATE,New entity created
+Entity Operations,ENTITY_READ,Entity accessed
+Entity Operations,ENTITY_UPDATE,Entity modified
+Entity Operations,ENTITY_DELETE,Entity deleted
+Entity Operations,ENTITY_ARCHIVE,Entity archived
+Entity Operations,ENTITY_EXPORT,Entity data exported
+Security Events,RATE_LIMIT_HIT,Rate limit exceeded
+Security Events,IP_BLOCKED,IP address blocked
+Security Events,SUSPICIOUS_ACTIVITY,Threat detected
+Security Events,FORCE_LOGOUT,User force logged out
+Security Events,SESSION_REVOKE,Session revoked
+Security Events,ALLOWLIST_UPDATE,IP allowlist changed
+System Events,CONFIG_CHANGE,System configuration changed
+System Events,BACKUP_CREATE,Database backup created
+System Events,BACKUP_RESTORE,Database restored from backup
+System Events,INTEGRATION_UPDATE,Integration settings changed
+System Events,WEBHOOK_FIRE,Webhook delivered
+Data Access,PHI_ACCESS,Sensitive data accessed
+Data Access,REPORT_GENERATE,Report generated
+Data Access,DATA_EXPORT,Data exported
+Data Access,BULK_OPERATION,Bulk operation executed
