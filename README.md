@@ -23,6 +23,7 @@ Comprehensive security and implementation documentation for a **multi-tenant Saa
 | File | Description |
 |------|-------------|
 | [`SUPER_ADMIN_DOCUMENTATION.md`](SUPER_ADMIN_DOCUMENTATION.md) | **Complete 4,000+ line guide** covering 50 sections with code snippets, flow diagrams, SQL schemas, TypeScript examples, a 130+ item implementation checklist, and a full live implementation reference |
+| [`SETUP_WIZARD_PROMPT.md`](SETUP_WIZARD_PROMPT.md) | **Universal SaaS Setup Wizard prompt** — 12-step first-run configuration wizard with Zod schemas, UI layouts, API specs, and analytics events. Copy-paste ready for any SaaS app. |
 
 ### CSV Data Files
 
