@@ -236,6 +236,17 @@ User submits credentials (email + password + tenant slug)
 | Tenant | Required, valid tenant slug |
 | Role | Defaults to lowest privilege role |
 
+### 2.6.1 Signup & Verification Security
+
+| Rule | Detail |
+|------|--------|
+| Rate limit signup | 3 per IP per hour |
+| Rate limit verify | 10 per IP per hour |
+| Verification token | Cryptographically random UUID, 24hr expiry |
+| Password | Min 8 chars (existing PBKDF2 hashing) |
+| Email uniqueness | Enforced globally |
+| Duplicate signup | Rejected if email already exists |
+
 ### 2.7 Logout
 
 - Destroys server-side session (Redis)
