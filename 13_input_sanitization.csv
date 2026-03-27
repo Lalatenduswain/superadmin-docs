@@ -1,0 +1,9 @@
+Function,Purpose,Example
+escapeHtml(input),"Replace <>&""' with HTML entities",<script> → &lt;script&gt;
+"sanitizeInput(input, maxLen?)",Remove null bytes trim enforce length,General text fields
+sanitizeFilename(name),Remove ../ / \ control chars,File upload names
+sanitizeUrl(url),Allow only http:// and https:// protocols,URL fields
+sanitizeEmail(email),Lowercase trim format validation,Email inputs
+stripHtml(input),Remove all HTML tags entirely,Rich text to plain text
+sanitizeSearchQuery(query),Remove SQL wildcards (% _),Search boxes
+sanitizeJson(input),Parse and re-serialize prevent prototype pollution,API body parsing

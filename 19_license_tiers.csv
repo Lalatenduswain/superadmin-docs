@@ -1,0 +1,6 @@
+Tier,Max Users,Storage,Modules,Support,Duration
+Free,5,1 GB,Core only,Community,Perpetual
+Starter,25,10 GB,Core + Analytics,Email,Annual
+Professional,100,100 GB,All standard,Priority email,Annual
+Enterprise,Unlimited,Unlimited,All + Custom,Dedicated,Annual
+Trial,10,5 GB,All,Email,14 days

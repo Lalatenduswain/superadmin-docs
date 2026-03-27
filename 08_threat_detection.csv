@@ -1,0 +1,7 @@
+Threat Type,Detection Logic,Risk Level,Automatic Response
+Brute Force,3+ failed login attempts from same IP in 15 min,High,Log + alert + temporary rate limit increase
+Geographic Anomaly,Login from country with no prior history,Medium,Log + email alert to SUPER_ADMIN
+Time-Based Anomaly,Login outside normal hours (1-5 AM local),Low,Log only visible in dashboard
+Device Anomaly,Bot-like user agent or unknown device fingerprint,Medium,Log + email alert to SUPER_ADMIN
+Rapid Attempts,Less than 5 second interval between consecutive attempts,High,Log + alert + temporary rate limit increase
+Credential Stuffing,Multiple email attempts from single IP,Critical,Log + alert + temporary IP block + force password reset

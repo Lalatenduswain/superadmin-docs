@@ -1,0 +1,68 @@
+Router,Endpoint,Method,Access Level,Description
+security,getIpAllowlist,GET,Admin,Fetch tenant allowed IPs
+security,addIpToAllowlist,POST,Admin,Add IP with validation
+security,removeIpFromAllowlist,DELETE,Admin,Remove specific IP
+security,updateIpAllowlist,PUT,Admin,Bulk replace allowlist
+security,getRateLimits,GET,Admin,List active rate limits with TTL
+security,clearRateLimit,DELETE,Admin,Clear specific rate limit key
+security,clearRateLimitByIp,DELETE,Admin,Clear all limits for an IP
+security,clearAllRateLimits,DELETE,Admin,Emergency clear all limits
+security,getLockedUsers,GET,Admin,List locked accounts
+security,unlockUser,POST,Admin,Unlock user by ID
+security,getSecurityStats,GET,Admin,Aggregate security metrics
+security,getThreats,GET,Admin,Detected threats list
+security,getSecurityOverview,GET,Admin,Security dashboard data
+user,list,GET,Admin,Paginated users with search/filters
+user,getById,GET,Admin,Full user details
+user,create,POST,Admin,New user creation
+user,update,PUT,Admin,Profile update
+user,updateRole,PUT,Admin,Change user role
+user,updateStatus,PUT,Admin,Activate/deactivate
+user,delete,DELETE,Admin,Soft delete user
+user,permanentDelete,DELETE,Super Admin,Hard delete (90+ days inactive)
+user,resetPassword,POST,Admin,Admin-initiated password reset
+user,search,GET,Protected,User autocomplete
+user,import,POST,Admin,Bulk CSV import
+user,export,GET,Admin,CSV export with optional PII masking
+user,getInactiveUsers,GET,Admin,Users inactive 90+ days
+auth,login,POST,Public,Email/password + tenant authentication
+auth,register,POST,Public,New user registration
+auth,logout,POST,Protected,Session destruction
+auth,refresh,POST,Protected,Token refresh
+auth,changePassword,POST,Protected,Requires current password
+auth,resetPassword,POST,Public,Request password reset email
+auth,setupMfa,POST,Protected,Generate MFA secret + QR
+auth,verifyMfa,POST,Protected,Confirm TOTP and enable MFA
+auth,disableMfa,POST,Protected,Requires password + TOTP
+auth,forceLogout,POST,Admin,Force logout specific user
+auth,bulkForceLogout,POST,Super Admin,Force logout all users
+smtp,getConfig,GET,Admin,Get SMTP settings
+smtp,updateConfig,PUT,Admin,Save SMTP configuration
+smtp,testEmail,POST,Admin,Send test email
+monitoring,getApiMetrics,GET,Admin,Per-endpoint performance
+monitoring,getSystemHealth,GET,Admin,CPU memory disk DB
+monitoring,getHealthCheck,GET,Public,Basic health status
+monitoring,getDatabaseHealth,GET,Admin,DB connections size slow queries
+monitoring,getActiveSessions,GET,Admin,Current active sessions
+analytics,getUserStats,GET,Admin,User counts login stats
+analytics,getEntityStats,GET,Admin,Entity metrics
+analytics,getRevenueStats,GET,Admin,Revenue and billing metrics
+analytics,getPerformanceStats,GET,Admin,Team/department performance
+analytics,getDashboardData,GET,Admin,Aggregated dashboard data
+analytics,exportReport,GET,Admin,Generate and download report
+database,createBackup,POST,Super Admin,Trigger database backup
+database,listBackups,GET,Super Admin,List all backups
+database,restoreBackup,POST,Super Admin,Restore from backup
+database,downloadBackup,GET,Super Admin,Download backup file
+database,deleteBackup,DELETE,Super Admin,Remove old backup
+database,getConnectionStats,GET,Admin,Connection pool metrics
+config,getSettings,GET,Admin,Get all system settings
+config,updateSettings,PUT,Admin,Update system settings
+config,getChangeLog,GET,Admin,Configuration change history
+config,revertChange,POST,Admin,Revert to previous value
+webhook,list,GET,Admin,List configured webhooks
+webhook,create,POST,Admin,Create new webhook
+webhook,update,PUT,Admin,Update webhook config
+webhook,delete,DELETE,Admin,Remove webhook
+webhook,test,POST,Admin,Send test payload
+webhook,getDeliveryLog,GET,Admin,View delivery history

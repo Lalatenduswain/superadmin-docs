@@ -1,0 +1,20 @@
+#,Tab Name,Path,Purpose,Update Frequency
+1,Statistics,/dashboard/admin,Operational KPIs entity counts revenue,Real-time (5s)
+2,API Performance,/dashboard/admin/api-performance,P50/P95/P99 latency error rates,Real-time (10s)
+3,Security Center,/dashboard/admin/security,MFA sessions rate limits threats,Real-time
+4,System Monitor,/dashboard/admin/system-monitor,CPU memory disk DB connections,Real-time (5s)
+5,Business Intelligence,/dashboard/admin/analytics,Trends forecasts departmental stats,Hourly
+6,User Management,/dashboard/admin/users,CRUD roles invitations permissions,On-demand
+7,Audit Logs,/dashboard/admin/audit,Compliance sensitive access exports,Real-time
+8,Object Storage,/dashboard/admin/storage,File storage monitoring configuration,On-demand
+9,Email / SMTP,/dashboard/admin/email,SMTP config test email templates,On-demand
+10,Integrations,/dashboard/admin/integrations,Webhooks APIs external connections,On-demand
+11,System Configuration,/dashboard/admin/system,DB security branding feature toggles,On-demand
+12,Inactive Users,/dashboard/admin/inactive-users,90+ day dormant account management,Daily
+13,User Logs,/dashboard/admin/user-logs,Login history geo-location devices,On-demand
+14,MFA Management,/dashboard/admin/mfa,MFA adoption controls reset,On-demand
+15,Database Management,/dashboard/admin/database,Backup restore connection pool,On-demand
+16,License Management,/dashboard/admin/license,Subscription tiers keys expiry,On-demand
+17,Alert Rules,/dashboard/admin/alert-rules,Notification rules triggers channels,On-demand
+18,Feature Flags,/dashboard/admin/feature-flags,Progressive rollout kill switches,On-demand
+19,Surveys,/dashboard/admin/surveys,Satisfaction templates analytics,On-demand

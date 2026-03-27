@@ -1,0 +1,10 @@
+Data State,Algorithm,Key Length,Rotation,Use Case
+In Transit,TLS 1.3,256-bit,Per-session,All network communication
+At Rest (DB),AES-256-GCM,256-bit,Annual,Database fields
+At Rest (Files),AES-256-CBC,256-bit,Annual,Stored files
+Passwords,bcrypt,12 rounds,Per-change,User passwords
+Sessions,HMAC-SHA256,256-bit,Per-session,Session tokens
+License Keys (V2),ML-KEM-768 + AES-256-GCM,Post-quantum,Per-generation,License keys (NIST FIPS 203)
+Webhook Signatures,HMAC-SHA256,256-bit,Per-webhook,Webhook payload signing
+Backup,AES-256,256-bit,Per-backup,Database backups
+TOTP Secret,AES-256,256-bit,On reset,MFA secrets at rest

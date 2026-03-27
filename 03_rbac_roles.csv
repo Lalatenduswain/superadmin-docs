@@ -1,0 +1,8 @@
+Level,Role,Description,System Config,Cross-Tenant,Tenant Config,User Mgmt,Role Assign,Audit Log,Reports,Entity CRUD,Record RW,Read Only,Own Data
+7,SUPER_ADMIN,Platform-level control cross-tenant,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+6,TENANT_ADMIN,Full control within tenant,No,No,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+5,MANAGER,Department/team management,No,No,No,No,No,Yes,Yes,Yes,Yes,Yes,Yes
+4,OPERATOR,Day-to-day operations,No,No,No,No,No,No,No,Yes,Yes,Yes,Yes
+3,STAFF,Standard user limited write,No,No,No,No,No,No,No,No,Yes,Yes,Yes
+2,VIEWER,Read-only access,No,No,No,No,No,No,No,No,No,Yes,Yes
+1,CUSTOMER,Self-service own data only,No,No,No,No,No,No,No,No,No,No,Yes

@@ -1,0 +1,11 @@
+ID,Vulnerability,Status,Protection Method,Implementation Detail
+A01,Broken Access Control,Protected,RBAC + JWT + Session Management,"Role hierarchy, dual SUPER_ADMIN check, tenant isolation, RLS"
+A02,Cryptographic Failures,Protected,HTTPS + bcrypt + Secure Headers,"TLS 1.3, AES-256-GCM, bcrypt (12 rounds), HSTS"
+A03,Injection,Protected,Parameterized queries + Input validation,"Prisma/Drizzle ORM, Zod validation, sanitization functions"
+A04,Insecure Design,Protected,Security by design + Threat modeling,"Secure defaults, threat modeling, permission system"
+A05,Security Misconfiguration,Protected,Hardened headers + CSP + HSTS,"15+ security headers, strict CSP, env validation"
+A06,Vulnerable Components,Mitigated,Dependency scanning + Updates,"npm audit, Snyk, automated SCA in CI/CD"
+A07,Identity Failures,Protected,Account lockout + MFA ready,"5-attempt lockout, TOTP MFA, bcrypt, session mgmt"
+A08,Software Integrity Failures,Protected,File validation + Code signing ready,"HMAC-SHA256, file header validation, MIME checks"
+A09,Logging Failures,Protected,Comprehensive audit logging,"35+ action types, immutable logs, retention policy"
+A10,Server-Side Request Forgery,Protected,Input validation + URL filtering,"URL allowlist, sanitizeUrl(), network segmentation"

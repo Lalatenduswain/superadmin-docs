@@ -1,0 +1,11 @@
+Endpoint Type,Limit,Window,Key,Response,Purpose
+Login,5 requests,15 minutes,IP,429 + lockout warning,Prevent brute force attacks
+Registration,3 requests,1 hour,IP,429,Prevent spam account creation
+Password Reset,3 requests,1 hour,IP,429,Prevent password reset abuse
+MFA Verify,5 requests,5 minutes,IP + userId,429 + account lock,Prevent MFA brute force
+API (Standard),100 requests,1 minute,IP,429,General protection
+API (Admin),50 requests,1 minute,IP + role,429,Protect sensitive operations
+File Upload,20 requests,1 minute,IP + userId,429,Prevent file system abuse
+Export (CSV/PDF),10 requests,1 minute,IP + userId,429,Prevent bulk export abuse
+Webhook Delivery,100 requests,1 minute,tenantId,Queue delay,Control webhook load
+Search,30 requests,1 minute,IP + userId,429,Prevent search scraping

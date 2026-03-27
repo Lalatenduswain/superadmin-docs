@@ -1,0 +1,10 @@
+Parameter,Value,Notes
+Algorithm,HS256,HMAC SHA-256
+Access Token Expiry,1 hour,Configurable
+Refresh Token Expiry,7 days,Configurable
+Token Storage,HttpOnly cookie,Never localStorage
+Cookie Flags,Secure; SameSite=Lax; HttpOnly,All three required
+Library,jose,Edge-compatible
+Claims,sub email role tenantId sessionId iat exp,Standard JWT claims
+Max Failed Attempts,5,Before account lockout
+Lock Duration,15 minutes,Auto-unlock after period

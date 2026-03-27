@@ -1,0 +1,11 @@
+Framework,Compliance Level,Status,Key Controls
+OWASP Top 10 2021,100%,Full Compliance,All 10 vulnerabilities addressed
+ISO 27001,Audit-Ready,Full Compliance,Complete audit trail JSONB change tracking
+GDPR,Full,Full Compliance,Encryption user deactivation audit trails
+SOC 2 Type II,Framework,Partial,Security controls monitoring implemented
+NIST Cybersecurity Framework,Aligned,Partial,Alignment complete formal mapping needed
+PCI-DSS,Not Required,N/A,Not applicable for standard SaaS
+HIPAA,Partial,Partial,No PHI in analytics self-hosted option
+CCPA,Full,Full Compliance,Opt-out mechanism data deletion
+NIST 800-53,Not Required,N/A,Military/government only
+FIPS 140-2/3,Not Required,N/A,Hardware security modules required
