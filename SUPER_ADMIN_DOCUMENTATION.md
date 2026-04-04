@@ -3457,6 +3457,7 @@ These are **not required for standard enterprise** but may apply to government o
 
 ---
 
+
 ## 50. Live Implementation Reference — EHS SuperAdmin
 
 | Status | Priority | Category |
@@ -3465,20 +3466,91 @@ These are **not required for standard enterprise** but may apply to government o
 
 > This section documents the **actual implemented features** from the EHS ISO ISMS SuperAdmin dashboard at `https://audit.ceruleaninfotech.com/superadmin-lala`. It serves as a real-world reference for how the template sections above translate into a working production system.
 
+---
+
 ### 50.1 Implementation Overview
 
 | Field | Value |
 |-------|-------|
-| URL | `/superadmin-lala` (Next.js App Router) |
-| Framework | Next.js 15 (App Router) |
-| Authentication | NextAuth.js session + `ADMIN` role check |
-| API Route | `/api/admin/superadmin` (GET sections, POST actions) |
-| Component | `src/components/superadmin/superadmin-dashboard.tsx` (4,172 lines) |
-| Data Fetching | Server-side parallel `Promise.all()` for initial load, client-side per-tab refresh |
-| Database | PostgreSQL via Prisma ORM |
+| URL | `/superadmin-lala` (Next.js App Router, stealth — not in sidebar) |
+| Framework | Next.js 16 (App Router) with TypeScript |
+| Authentication | NextAuth.js v5 session + `ADMIN` role check |
+| Token Auth | Bearer token support for API clients (`api-auth.ts`) |
+| API Route | `/api/admin/superadmin` (unified GET sections + POST actions) |
+| Component | `src/components/superadmin/superadmin-dashboard.tsx` (~4,172 lines) |
+| Queries | `src/lib/superadmin-queries.ts` (~510 lines) |
+| API Handler | `src/app/api/admin/superadmin/route.ts` (~793 lines) |
+| Database | PostgreSQL 16 via Prisma v7 (PrismaPg adapter) |
+| UI Library | Tailwind CSS v4 + shadcn-style components |
+| Icons | Lucide React |
 | Process Manager | PM2 (`iso-isms` process) |
 
-### 50.2 Dashboard Tab Inventory (13 Tabs — Implemented)
+### 50.2 Architecture — Single Page, 13 Tabs
+
+**Design Philosophy:**
+- **One stealth page** — Not listed in sidebar; known only to administrators
+- **Single API route** — All 13 tabs share ONE endpoint, dispatched by `section` (GET) or `action` (POST)
+- **Server + Client split** — Server component fetches 5 initial datasets in parallel; client handles tab switching and mutations
+- **Tab state persisted** — Active tab saved in `localStorage` for return visits
+
+**Data Flow:**
+
+```
+page.tsx (Server Component)
+  │
+  ├── auth() → check ADMIN role → redirect("/dashboard") if not
+  │
+  ├── Promise.all([
+  │     getSystemHealth(),        // Tab 1: System Health
+  │     getDatabaseStats(),       // Tab 2: Database
+  │     getUserSecurity(),        // Tab 3: Users & Security
+  │     getAuditAnalytics(),      // Tab 5: Audit Analytics
+  │     getEnvironmentConfig(),   // Tab 6: Environment
+  │   ])
+  │
+  └── <SuperAdminDashboard initialData={...} />
+        │
+        ├── Tab state in localStorage ("superadmin-tab")
+        ├── Per-tab refresh via GET /api/admin/superadmin?section=xxx
+        └── Mutations via POST /api/admin/superadmin { action: "xxx", ...params }
+```
+
+**Page-Level Auth (Server Component):**
+
+```typescript
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+
+export default async function SuperAdminPage() {
+  const session = await auth();
+  if (!session?.user?.id || (session.user as { role?: string }).role !== "ADMIN") {
+    redirect("/dashboard");
+  }
+
+  const [health, database, users, audit, environment] = await Promise.all([
+    getSystemHealth(),
+    getDatabaseStats(),
+    getUserSecurity(),
+    getAuditAnalytics(),
+    getEnvironmentConfig(),
+  ]);
+
+  return <SuperAdminDashboard initialData={{ health, database, users, audit, environment }} />;
+}
+```
+
+**API-Level Auth (Route Handler):**
+
+```typescript
+import { authenticateRequest } from "@/lib/api-auth";
+
+const user = await authenticateRequest(request);
+// Supports: 1) NextAuth session cookies (browser)  2) Bearer token (API clients)
+if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+if (user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+```
+
+### 50.3 Dashboard Tab Inventory (13 Tabs)
 
 | # | Tab ID | Label | Icon | Data Source | Status |
 |---|--------|-------|------|-------------|--------|
@@ -3496,95 +3568,306 @@ These are **not required for standard enterprise** but may apply to government o
 | 12 | `bulkactions` | Bulk Actions | Layers | `/api/bulk-actions/history` | Done |
 | 13 | `datamanage` | Data Management | Trash2 | Assets + Acknowledgments | Done |
 
-### 50.3 Tab 1: System Health
+**Tab Definition:**
+
+```typescript
+const TABS = [
+  { id: "health",      label: "System Health",     icon: Activity },
+  { id: "database",    label: "Database",           icon: Database },
+  { id: "users",       label: "Users & Security",   icon: Shield },
+  { id: "activity",    label: "User Activity",      icon: Eye },
+  { id: "audit",       label: "Audit Analytics",    icon: FileText },
+  { id: "environment", label: "Environment",        icon: Settings },
+  { id: "chatbot",     label: "AI Chatbot",         icon: MessageSquare },
+  { id: "storage",     label: "Storage",            icon: HardDrive },
+  { id: "ocs",         label: "OCS Servers",        icon: Monitor },
+  { id: "gravityzone", label: "GravityZone",        icon: ShieldCheck },
+  { id: "modules",     label: "Modules",            icon: Package },
+  { id: "bulkactions", label: "Bulk Actions",       icon: Layers },
+  { id: "datamanage",  label: "Data Management",    icon: Trash2 },
+] as const;
+```
+
+### 50.4 API Route Dispatch Pattern
+
+**GET Handler — Route by `?section=`**
+
+```typescript
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const section = url.searchParams.get("section");
+  switch (section) {
+    case "health":         return NextResponse.json(await getSystemHealth());
+    case "database":       return NextResponse.json(await getDatabaseStats());
+    case "users":          return NextResponse.json(await getUserSecurity());
+    case "audit":          return NextResponse.json(await getAuditAnalytics());
+    case "environment":    return NextResponse.json(await getEnvironmentConfig());
+    case "chatbot":        return NextResponse.json(await getChatbotConfig());
+    case "storage":        return NextResponse.json(await getStorageConfig());
+    case "ocs_servers":    return NextResponse.json(await getOcsServers());
+    case "gz_servers":     return NextResponse.json(await getGzServers());
+    case "backups_list":   return NextResponse.json(await listS3Backups());
+    case "module_toggles": return NextResponse.json(await getModuleToggles());
+    case "audit_logs":     return NextResponse.json(await getAuditLogs(params));
+    default:               return NextResponse.json(await getAllSections());
+  }
+}
+```
+
+**POST Handler — Route by `body.action`**
+
+```typescript
+export async function POST(request: Request) {
+  const body = await request.json();
+  switch (body.action) {
+    case "backup":                     // Tab 2: DB backup download
+    case "backup_to_s3":               // Tab 2: DB backup to S3
+    case "unlock_user":                // Tab 3: Unlock locked account
+    case "deactivate_user":            // Tab 3: Deactivate user
+    case "purge_audit_logs":           // Tab 5: Purge old logs (by age)
+    case "delete_audit_logs":          // Tab 5: Delete selected logs
+    case "delete_all_audit_logs":      // Tab 5: Delete ALL logs
+    case "save_ai_key":                // Tab 7: Save AI provider config
+    case "test_ai_key":                // Tab 7: Test AI connection
+    case "delete_ai_key":              // Tab 7: Remove AI config
+    case "save_storage_config":        // Tab 8: Save S3 config
+    case "test_storage_connection":    // Tab 8: Test S3 connectivity
+    case "delete_storage_config":      // Tab 8: Remove S3 config
+    case "migrate_to_s3":              // Tab 8: Migrate local files to S3
+    case "save_ocs_server":            // Tab 9: Create/update OCS server
+    case "test_ocs_server":            // Tab 9: Test OCS connection
+    case "delete_ocs_server":          // Tab 9: Delete OCS server
+    case "save_gz_server":             // Tab 10: Create/update GZ server
+    case "test_gz_server":             // Tab 10: Test GZ connection
+    case "delete_gz_server":           // Tab 10: Delete GZ server
+    case "save_module_toggles":        // Tab 11: Save disabled modules
+    case "bulk_delete_assets":         // Tab 13: Cascade-delete assets
+    case "bulk_delete_acknowledgments":// Tab 13: Delete acks + notifications
+  }
+}
+```
+
+---
+
+### 50.5 Tab 1: System Health
 
 Real-time server health monitoring with live metrics.
 
-**Stat Cards:**
+**Stat Cards (4):**
 
 | Card | Metric | Source |
 |------|--------|--------|
 | CPU Usage | Percentage + core count + model | `os.cpus()` |
 | Memory Usage | Used/Total + percentage | `os.totalmem()` / `os.freemem()` |
-| Disk Usage | Used/Total/Available + percentage | `df -h /` |
+| Disk Usage | Used/Total/Available + percentage | `execSync("df -h / \| tail -1")` |
 | System Uptime | System + process uptime | `os.uptime()` / `process.uptime()` |
 
-**Collapsible Sections:**
+**Collapsible Detail Sections:**
 
 | Section | Content |
 |---------|---------|
-| CPU | Progress bar + load average (1m/5m/15m) |
-| Memory | Progress bar + RSS, heap used/total, external |
+| CPU | Progress bar + load averages (1m/5m/15m) + core count + model name |
+| Memory | Progress bar + Node.js RSS, heap used/total, external memory |
 | Disk | Progress bar + available space |
-| Database Connectivity | Health status (Connected/Disconnected) + latency in ms |
-| OS & Runtime | OS type, release, hostname, arch, Node.js version, app version |
-| PM2 Process | Process name, status badge, uptime, restart count, memory usage |
+| Database Connectivity | Health status badge (Connected/Disconnected) + latency in ms |
+| OS & Runtime | OS type, release, hostname, architecture, Node.js version, app version |
+| PM2 Process | Process name, status badge (online/stopped), uptime, restart count, memory usage |
 
-**Color-coded progress bars:** Green (<70%), Yellow (70-90%), Red (>90%).
+**Color-Coded Progress Bars:** Green (<70%), Yellow (70-90%), Red (>90%)
 
-### 50.4 Tab 2: Database Management
+**UI Layout:**
+
+```
+┌──────────────┬──────────────┬──────────────┬──────────────┐
+│  CPU Usage   │  Memory      │  Disk Usage  │  Uptime      │
+│  45.2%       │  6.8/16 GB   │  78/120 GB   │  42d 7h      │
+└──────────────┴──────────────┴──────────────┴──────────────┘
+┌──────────────────┬──────────────────┬──────────────────────┐
+│  CPU Details     │  Memory Details  │  Disk Details        │
+│  ████████░░ 80%  │  ██████░░░░ 60%  │  ████████░░ 65%      │
+│  Load: 2.1/1.8/1.5│ RSS: 245MB     │  Avail: 42 GB        │
+│  Cores: 8        │  Heap: 180MB     │                      │
+└──────────────────┴──────────────────┴──────────────────────┘
+┌──────────────────────────────┬──────────────────────────────┐
+│  Database Connectivity       │  OS & Runtime Info           │
+│  ✅ Connected — 2ms          │  Linux 6.17 / x86_64        │
+│                              │  Node.js v20.11.0            │
+└──────────────────────────────┴──────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  PM2 Processes                                              │
+│  iso-isms  │ 🟢 online │ 42d 7h │ 0 restarts │ 245 MB     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+```typescript
+// CPU usage calculation
+const cpus = os.cpus();
+const cpuUsage = cpus.reduce((acc, cpu) => {
+  const total = Object.values(cpu.times).reduce((a, b) => a + b, 0);
+  const idle = cpu.times.idle;
+  return acc + ((total - idle) / total) * 100;
+}, 0) / cpus.length;
+
+// DB ping with latency
+const start = Date.now();
+await prisma.$queryRawUnsafe("SELECT 1");
+const latency = Date.now() - start;
+
+// PM2 status
+const pm2List = JSON.parse(execSync("pm2 jlist").toString());
+```
+
+---
+
+### 50.6 Tab 2: Database Management
 
 Full PostgreSQL database administration panel.
 
-**Stat Cards:**
+**KPI Cards (5):**
 
-| Card | Metric |
-|------|--------|
-| Database Size | Human-readable (e.g., "245 MB") |
-| Tables | Count of public schema tables |
-| Total Rows | Sum of all table row counts |
-| Connections | Active PostgreSQL connections |
-| Dead Tuples | Dead tuple count (vacuum indicator) |
+| Card | Metric | SQL Source |
+|------|--------|-----------|
+| Database Size | Human-readable (e.g., "245 MB") | `SELECT pg_database_size(current_database())` |
+| Tables | Count of public schema tables | `SELECT count(*) FROM pg_stat_user_tables` |
+| Total Rows | Sum of all table row counts | `SELECT sum(n_live_tup) FROM pg_stat_user_tables` |
+| Connections | Active PostgreSQL connections | `SELECT count(*) FROM pg_stat_activity` |
+| Dead Tuples | Dead tuple count (vacuum indicator) | `SELECT sum(n_dead_tup) FROM pg_stat_user_tables` |
 
 **Features:**
 
 | Feature | Description |
 |---------|-------------|
-| Download DB Backup | Full `pg_dump` backup, streamed as `.sql` file download |
-| S3 Automated Backups | Daily backups to S3/MinIO with 7-day retention (2:00 AM IST) |
+| Download DB Backup | Full `pg_dump` → stream as `.sql` file download |
+| S3 Automated Backups | Daily backups to S3/MinIO with 7-day retention (2:00 AM IST cron) |
 | Backup Now to S3 | On-demand S3 backup with old backup cleanup |
 | S3 Backup List | Table showing all backups with file name, size, and date |
-| All Tables View | Sortable table (name, rows, size) with sort direction toggles |
+| All Tables View | Sortable table (name, rows, size) with ascending/descending toggle |
 | Prisma Migrations | Last 20 migrations with name, date, and Applied/Pending status |
-| Vacuum Info | Last vacuum/autovacuum timestamps per table |
 
 **Actions:**
 
 | Action | Confirmation | API Action |
 |--------|-------------|------------|
-| Download Backup | Dialog confirmation | `backup` + `CONFIRM_BACKUP` |
+| Download Backup | Dialog with text | `backup` + `CONFIRM_BACKUP` |
 | Backup to S3 | Button click | `backup_to_s3` |
 
-### 50.5 Tab 3: Users & Security
+**UI Layout:**
+
+```
+┌───────────┬───────────┬───────────┬────────────┬────────────┐
+│ DB Size   │ Tables    │ Total Rows│ Connections│ Dead Tuples│
+│ 245 MB    │ 167       │ 412,300   │ 8          │ 1,204      │
+└───────────┴───────────┴───────────┴────────────┴────────────┘
+┌────────────────────────────────��────────────────────────────┐
+│ [📥 Download DB Backup]  [☁️ Backup to S3]                  │
+├─────────────────────────────────────────────────────────────┤
+│ All Tables (sortable by name ↕ / rows ↕ / size ↕)          │
+│ Table Name         │ Row Count   │ Size                     │
+│ ────────────────────┼─────────────┼──────                    │
+│ users              │ 60          │ 128 KB                   │
+│ audit_logs         │ 15,230      │ 4.2 MB                   │
+│ timesheet_entries  │ 191,000     │ 89 MB                    │
+├─────────────────────────────────────────────────────────────┤
+│ Prisma Migrations (last 20)                                 │
+│ Name                         │ Date        │ Status          │
+│ ─────────────────────────────┼─────────────┼──────           │
+│ 20260315_add_bulk_actions    │ 2026-03-15  │ ✅ Applied      │
+├─────────────────────────────────────────────────────────────┤
+│ ☁️ S3 Automated Backups (7-day retention)                    │
+│ File Name                │ Size    │ Date                    │
+│ ─────────────────────────┼─────────┼─────                    │
+│ backup-2026-04-04.sql.gz │ 12.3 MB │ 2026-04-04 02:00       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Backup Implementation:**
+
+```typescript
+// Local backup download
+const filePath = `/tmp/db-backup-${Date.now()}.sql`;
+execSync(`pg_dump "${process.env.DATABASE_URL}" > "${filePath}"`);
+const fileBuffer = fs.readFileSync(filePath);
+fs.unlinkSync(filePath); // cleanup temp file
+return new NextResponse(fileBuffer, {
+  headers: {
+    "Content-Type": "application/sql",
+    "Content-Disposition": `attachment; filename="backup-${date}.sql"`,
+  },
+});
+
+// S3 backup (db-backup.ts)
+// pg_dump → gzip → S3 PutObjectCommand → 7-day retention via ListObjectsV2 + DeleteObjectsCommand
+```
+
+---
+
+### 50.7 Tab 3: Users & Security
 
 Comprehensive user management with security controls.
 
-**Stat Cards:** Total Users, Active, Inactive, Locked
+**KPI Cards (4):** Total Users, Active, Inactive, Locked
 
 **Sections:**
 
 | Section | Content |
 |---------|---------|
-| Role Distribution | Badges showing count per role (ADMIN, USER, etc.) |
-| Login Activity (24h) | Color-coded badges: LOGIN (green), LOGIN_FAILED (red), LOGOUT (gray) |
-| Locked Accounts | Table with name, email, locked-until timestamp + Unlock button |
+| Role Distribution | Badge counts per role (ADMIN, RISK_OWNER, AUDITOR, VIEWER) |
+| Login Activity (24h) | Color-coded badges: LOGIN (green), LOGIN_FAILED (red), LOGOUT (gray) — counts from audit logs |
+| Locked Accounts | Table with name, email, locked-until timestamp + "Unlock" button |
 | Recent Failed Logins | Last 20 failed logins: entity, IP address, timestamp |
-| Stale Users (90+ days) | Users with no login in 90+ days: name, email, last login, role |
-| All Users | Full user table: name, email, role, department, last login, status, failed attempts, created |
+| Stale Users (90+ days) | Users with no login in 90+ days + "Deactivate" button |
+| All Users | Full table: name, email, role, department, last login, status, failed attempts + "Reset Password" button |
 
 **User Actions:**
 
-| Action | Confirmation | Description |
-|--------|-------------|-------------|
-| Unlock User | Dialog | Resets `lockedUntil` and `failedLoginAttempts` to 0 |
-| Deactivate User | Dialog + `CONFIRM_DEACTIVATE` | Sets `isActive = false` |
-| Reset Password | Dialog + password input | Min 15 chars, confirmation match required |
+| Action | Confirmation | Implementation |
+|--------|-------------|----------------|
+| Unlock User | Simple dialog | `prisma.user.update({ data: { failedLoginAttempts: 0, lockedUntil: null } })` |
+| Deactivate User | Dialog + `CONFIRM_DEACTIVATE` | `prisma.user.update({ data: { isActive: false } })` |
+| Reset Password | Dialog (min 15 chars, show/hide toggle, confirm match) | Calls `PUT /api/users/[id]` with hashed password |
 
-### 50.6 Tab 4: User Activity Tracking
+**UI Layout:**
+
+```
+┌──────────────┬──────────────┬──────────────┬──────────────┐
+│ Total Users  │ Active Users │ Inactive     │ Locked       │
+│ 60           │ 58           │ 2            │ 0            │
+└──────────────┴──────────────┴──────────────┴──────────────┘
+
+Role Distribution: [ADMIN: 5] [RISK_OWNER: 12] [AUDITOR: 8] [VIEWER: 35]
+
+Login Activity (24h): [LOGIN: 23 🟢] [LOGIN_FAILED: 2 🔴] [LOGOUT: 15 🔵]
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🔒 Locked Accounts                                          │
+│ Name         │ Email              │ Locked Since  │ Action   │
+│ ─────────────┼────────────────────┼───────────────┼──────    │
+│ John Doe     │ john@example.com   │ 2h ago        │ [Unlock] │
+├─────────────────────────────────────────────────────────────┤
+│ 💤 Stale Users (90+ Days)                                    │
+│ Name         │ Email              │ Last Login    │ Action   │
+│ ─────────────┼────────────────────┼───────────────┼──────────│
+│ Jane Smith   │ jane@example.com   │ 120 days ago  │[Deactive]│
+├─────────────────────────────────────────────────────────────┤
+│ 🔴 Recent Failed Logins (last 20)                            │
+│ User         │ Email              │ Time          │ IP       │
+├─────────────────────────────────────────────────────────────┤
+│ All Users                                                    │
+│ Name │ Email │ Role │ Dept │ Last Login │ Failed │ Status │🔑│
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 50.8 Tab 4: User Activity Tracking
 
 Page view analytics per user with time-period filtering.
 
-**Filters:** 7 days / 14 days / 30 days period selector
+**Filters:** 7 days / 14 days / 30 days period selector buttons
+
+**API:** `GET /api/user/activity?days=N` (separate dedicated API route)
 
 **User Activity Summary Table:**
 
@@ -3592,12 +3875,12 @@ Page view analytics per user with time-period filtering.
 |--------|-------------|
 | User | Name + email |
 | Role | Role badge |
-| Page Views | Count of page views in period |
+| Page Views | Count of page views in selected period |
 | Time Spent | Total time formatted as h/m/s |
 | Last Active | Timestamp of last activity |
-| Most Visited | Most frequently visited page path |
+| Most Visited | Most frequently visited page path (human-friendly) |
 
-**Recent Page Views Table:**
+**Recent Page Views Table (last 50):**
 
 | Column | Description |
 |--------|-------------|
@@ -3607,22 +3890,46 @@ Page view analytics per user with time-period filtering.
 | Time | Timestamp |
 | IP Address | Client IP |
 
-### 50.7 Tab 5: Audit Analytics
+**Database Model:**
+
+```prisma
+model PageView {
+  id        String   @id @default(cuid())
+  userId    String
+  path      String     // e.g., "/risks", "/dashboard"
+  title     String?    // Human-friendly page title
+  duration  Int?       // Time spent in seconds
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("page_views")
+}
+```
+
+**Implementation:** Uses raw SQL aggregate query with subquery for per-user summary (top page, total time, view count).
+
+---
+
+### 50.9 Tab 5: Audit Analytics
 
 Comprehensive audit log analysis with multi-tier deletion capabilities.
 
-**Stat Cards:** Total Audit Logs, Logs Today, Total Logins, Failed Login Rate (%)
+**KPI Cards (4):** Total Audit Logs, Logs Today, Total Logins, Failed Login Rate (%)
 
 **Analysis Sections:**
 
 | Section | Content |
 |---------|---------|
 | Action Breakdown | Horizontal bar chart of each audit action type with relative widths |
-| Top 10 Active Users | Table: user name/email + action count |
-| Entity Type Breakdown | Table: entity/module type + count |
-| Recent Security Events | Color-coded: LOGIN_FAILED (red), SUPERADMIN_ACCESS (yellow), ROLE_CHANGED |
+| Top 10 Active Users | Table ranked by action count: user name/email + count |
+| Entity Type Breakdown | Module-by-module action counts table |
+| Recent Security Events | Last 20 color-coded events: LOGIN_FAILED (red), SUPERADMIN_ACCESS (yellow), PERMISSION_DENIED, ACCOUNT_LOCKED, ROLE_CHANGED, PASSWORD_CHANGED |
 
 **Activity Log Manager (Embedded Sub-Component):**
+
+Full paginated, searchable, filterable audit log browser built into the tab:
 
 | Feature | Description |
 |---------|-------------|
@@ -3630,18 +3937,46 @@ Comprehensive audit log analysis with multi-tier deletion capabilities.
 | Search | Filter by entity label, action, entity type, user name/email |
 | Action Filter | Dropdown populated from current page actions |
 | Module Filter | Dropdown for entity type filtering |
-| Select & Delete | Checkbox selection with bulk delete |
-| Delete All Logs | Safety confirmation requiring user to type "DELETE ALL" |
+| Select & Delete | Checkbox selection (individual + "Select All on Page") |
+| Delete Selected | Bulk delete checked items |
+| Delete All Logs | Nuclear option — requires typing "DELETE ALL" to confirm |
 
-**Three-Tier Deletion:**
+**Three-Tier Deletion System:**
 
 | Method | Confirmation | API Action |
 |--------|-------------|------------|
 | Purge by Age | Dialog (min 30, max 3650 days, default 365) | `purge_audit_logs` + `CONFIRM_PURGE` |
 | Delete Selected | Dialog showing selected count | `delete_audit_logs` + `CONFIRM_DELETE_LOGS` |
-| Delete All | Type "DELETE ALL" to confirm | `delete_all_audit_logs` + `CONFIRM_DELETE_ALL_LOGS` |
+| Delete All | Type "DELETE ALL" to enable button | `delete_all_audit_logs` + `CONFIRM_DELETE_ALL_LOGS` |
 
-### 50.8 Tab 6: Environment Configuration
+**UI Layout:**
+
+```
+┌───────────┬────────────┬───────────┬──────────────────┐
+│ Total Logs│ Logs Today │ Logins    │ Failed Login Rate│
+│ 15,230    │ 142        │ 4,560     │ 2.3%             │
+└───────────┴────────────┴───────────┴──────────────────┘
+┌───────────────────────────────────────────��─────────────────┐
+│ [🗑️ Purge Old Logs]                                         │
+├─────────────────────────────────────────────────────────────┤
+│ Action Breakdown:                                           │
+│ CREATE   ████████████████████ 4,230                         │
+│ UPDATE   ████████████████ 3,120                             │
+│ LOGIN    ████████████ 2,450                                 │
+│ DELETE   ████ 890                                           │
+├─────────────────────────────────────────────────────────────┤
+│ Activity Log Manager                                        │
+│ [🔍 Search...          ] [Action ▼] [Entity Type ▼]        │
+│ ☑ Select All │ [Delete Selected (3)] │ [Delete All Logs]   │
+│ ☐ │ 2026-04-04 10:30 │ CREATE │ Risk │ John │ Risk-001    │
+│ ☑ │ 2026-04-04 10:28 │ LOGIN  │ Auth │ Jane │ Logged in   │
+│ Page 1 of 50 │ [← Prev] [Next →]                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 50.10 Tab 6: Environment Configuration
 
 Read-only environment and dependency overview.
 
@@ -3650,17 +3985,31 @@ Read-only environment and dependency overview.
 | Section | Content |
 |---------|---------|
 | Application Config | NODE_ENV, NEXTAUTH_URL, NEXTAUTH_SECRET (masked), DATABASE_URL (masked), app version |
-| SMTP Configuration | SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_FROM_EMAIL, SMTP_USER — with configured/missing badges |
-| OCS Integration | OCS_API_URL, OCS_API_USER status |
+| SMTP Configuration | SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_FROM_EMAIL, SMTP_USER — each shown as "Configured" (green) or "Missing" (red) badge |
+| OCS Integration | OCS_API_URL, OCS_API_USER status badges |
 | Notification Config | NOTIFICATION_CRON_SCHEDULE, NOTIFICATION_CRON_ENABLED, Slack/Teams/Custom webhook status |
-| File Storage | File count + total size from `uploads/` directory |
-| Dependencies | All `package.json` dependencies with name + version in a grid layout |
+| File Storage | Local file count + total size from `uploads/` directory |
+| Dependencies | Grid of all npm packages from `package.json` with name + version |
 
-### 50.9 Tab 7: AI Chatbot Configuration
+**Secret Masking:**
+
+```typescript
+function maskSecret(value: string): string {
+  if (!value || value.length < 12) return "****";
+  return value.slice(0, 4) + "........" + value.slice(-4);
+}
+// "sk-abc123def456xyz789" → "sk-a........x789"
+```
+
+**Implementation:** Uses `process.env` for environment variables, `fs.readdirSync` for upload directory stats, `JSON.parse(fs.readFileSync("package.json"))` for dependencies.
+
+---
+
+### 50.11 Tab 7: AI Chatbot Configuration
 
 Multi-provider AI chatbot management with 13 supported providers.
 
-**Supported Providers:**
+**Supported Providers (13):**
 
 | Provider | Models | Tier |
 |----------|--------|------|
@@ -3682,23 +4031,58 @@ Multi-provider AI chatbot management with 13 supported providers.
 
 | Feature | Description |
 |---------|-------------|
-| Provider Selection | Visual card grid with radio selection |
+| Provider Selection | Visual card grid with radio-style selection, tier badge (Free/Paid) |
 | Model Dropdown | Pre-configured model list per provider |
 | API Key Input | Masked input with show/hide toggle + link to provider's key page |
-| Test Connection | Verify API key works before saving |
-| Remove Config | Delete all AI settings with confirmation |
+| Test Connection | Verify API key works before committing |
+| Remove Config | Delete all AI settings (AI_PROVIDER, AI_API_KEY, AI_MODEL) |
 | Status Display | Shows active provider, model, and masked key when configured |
 
-**Chatbot Capabilities:**
-- ISO 27001 domain knowledge
+**Chatbot Capabilities (when configured):**
+- Domain-specific knowledge (ISO 27001, CITPL policies)
 - Streaming responses
-- Per-user conversation persistence
+- Per-user conversation persistence in PostgreSQL
 - Max 2048 tokens per response
 - Last 16 messages context window
 
+**UI Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Status: ✅ Configured — Anthropic Claude / claude-3-haiku   │
+│ API Key: sk-an........6R4q                                  │
+│                                          [Test] [Remove]    │
+├─────────────────────────────────────────────────────────────┤
+│ Select Provider:                                            │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│ │ OpenAI   │ │ Claude ✓ │ │ Gemini   │ │ Groq     │       │
+│ │ [Paid]   │ │ [Paid]   │ │ [Free]   │ │ [Free]   │       │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+│ ... (9 more providers in grid)                             │
+├─────────────────────────────────────────────────────────────┤
+│ Model: [claude-3-haiku-20240307 ▼]                         │
+│ API Key: [sk-...                        ] [👁]              │
+│ 🔗 Get your API key from console.anthropic.com              │
+│                                            [Save & Test]    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Database Storage:**
+
+```
+SystemConfig table:
+  AI_PROVIDER = "anthropic"
+  AI_API_KEY  = "sk-ant-..."
+  AI_MODEL    = "claude-3-haiku-20240307"
+```
+
 **API Actions:** `save_ai_key`, `test_ai_key`, `delete_ai_key`
 
-### 50.10 Tab 8: S3/MinIO Storage Configuration
+**Cache Invalidation:** `clearApiKeyCache()` called after every save/delete to invalidate the in-memory config cache.
+
+---
+
+### 50.12 Tab 8: S3/MinIO Storage Configuration
 
 Object storage management with local-to-S3 migration support.
 
@@ -3706,46 +4090,63 @@ Object storage management with local-to-S3 migration support.
 
 | Field | Description |
 |-------|-------------|
-| Connection Status | Connected (S3/MinIO) or Local Disk |
+| Connection Status | "S3/MinIO Connected" (green) or "Local Disk (default)" (gray) |
 | Endpoint | S3-compatible endpoint URL |
 | Bucket | Target bucket name |
-| Path Prefix | Object key prefix |
+| Path Prefix | Object key prefix for evidence files |
 | Evidence Files | Count of evidence records in database |
 | Total Size | Aggregate file size |
 | Local Files | Count of files still on local disk |
 
-**Configuration Form:**
+**Configuration Form (6 fields):**
 
-| Field | Default | Required |
-|-------|---------|----------|
-| Endpoint URL | `http://100.91.171.68:9000` | Yes |
-| Bucket Name | `isms-evidence` | Yes |
-| Access Key | — | Yes |
-| Secret Key | — | Yes (masked, re-enter to change) |
-| Region | `us-east-1` | No |
-| Path Prefix | `evidence` | No |
+| Field | Required | Notes |
+|-------|----------|-------|
+| Endpoint URL | Yes | S3-compatible endpoint (e.g., `http://minio:9000`) |
+| Bucket Name | Yes | Auto-created via `ensureBucket()` if doesn't exist |
+| Access Key | Yes | AWS-style access key |
+| Secret Key | Yes | Masked; re-enter to change |
+| Region | No | Default: `us-east-1` |
+| Path Prefix | No | Object key prefix (e.g., `evidence/`) |
 
 **Actions:**
 
 | Action | Description |
 |--------|-------------|
-| Save Configuration | Saves S3 config + auto-creates bucket via `ensureBucket()` |
-| Test Connection | Verifies S3 connectivity |
+| Save Configuration | Saves S3 config to SystemConfig + auto-creates bucket |
+| Test Connection | Verifies S3 credentials and bucket access |
 | Remove Config | Reverts to local disk storage |
-| Migrate Files to S3 | Moves all local files to S3 with per-file progress, updates DB paths, deletes local copies |
+| Migrate Files to S3 | Moves all local files to S3 with per-file progress |
 
 **Migration Flow:**
+
 ```
 For each local file in uploads/evidence/:
   1. Read file from disk
   2. Lookup evidence record for moduleType
   3. Upload to S3: {prefix}/{moduleType}/{filename}
-  4. Update evidence.filePath in database
+  4. Update evidence.filePath in database with S3 key
   5. Delete local file
   6. Report: migrated N/total, errors[]
 ```
 
-### 50.11 Tab 9: OCS Inventory Servers
+**Database Storage:**
+
+```
+SystemConfig table:
+  S3_ENDPOINT    = "https://minio.example.com"
+  S3_ACCESS_KEY  = "AKIA..."
+  S3_SECRET_KEY  = "wJal..."
+  S3_BUCKET      = "evidence-bucket"
+  S3_REGION      = "us-east-1"
+  S3_PATH_PREFIX = "evidence/"
+```
+
+**Cache Invalidation:** `clearStorageConfigCache()` called after save/delete.
+
+---
+
+### 50.13 Tab 9: OCS Inventory Servers
 
 Multi-server OCS Inventory NG management for IT asset discovery.
 
@@ -3753,7 +4154,7 @@ Multi-server OCS Inventory NG management for IT asset discovery.
 
 | Column | Description |
 |--------|-------------|
-| Name | Server name (with star icon if default) |
+| Name | Server name (with ⭐ icon if default) |
 | API URL | OCS Inventory REST API endpoint |
 | Status | Enabled/Disabled badge |
 | Assets | Count of assets linked to this server |
@@ -3763,25 +4164,55 @@ Multi-server OCS Inventory NG management for IT asset discovery.
 | Action | Fields | Confirmation |
 |--------|--------|-------------|
 | Add Server | Name, API URL, Username, Password, Enabled, Set Default | — |
-| Edit Server | Same fields (password optional — keeps current if blank) | — |
+| Edit Server | Same fields (password optional — keeps current if blank/masked) | — |
 | Test Connection | Tests API connectivity, returns computer count | — |
 | Delete Server | — | Dialog: "Assets will be unlinked but not deleted" |
 
-**Special Features:**
+**Special Behaviors:**
 - Default server designation (only one at a time, auto-unsets others)
-- Password masking (first 4 chars + `****` in API responses)
+- Password masking in API responses (first 4 + `****`)
 - Connection test shows: "Connected — N computers found"
-- Assets are unlinked (FK nullified), not deleted when server is removed
+- On delete: FK `ocsServerId` nullified on linked Assets (assets preserved, just unlinked)
+- Cache invalidation: `clearOcsConfigCache()` after every mutation
 
-### 50.12 Tab 10: Bitdefender GravityZone Integration
+**Database Model:**
 
-Endpoint protection management via GravityZone API.
+```prisma
+model OcsServer {
+  id        String   @id @default(cuid())
+  name      String
+  apiUrl    String
+  username  String
+  password  String
+  enabled   Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  assets    Asset[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("ocs_servers")
+}
+```
+
+**Password Handling in Edit:**
+
+```typescript
+// Only update password if user typed a new value (not the masked placeholder)
+if (body.password && !body.password.includes("****")) {
+  updateData.password = body.password;
+}
+```
+
+---
+
+### 50.14 Tab 10: Bitdefender GravityZone Integration
+
+Endpoint protection management via GravityZone JSON-RPC 2.0 API.
 
 **Server List Table:**
 
 | Column | Description |
 |--------|-------------|
-| Name | Server name (with star icon if default) |
+| Name | Server name (with ⭐ icon if default) |
 | Access URL | GravityZone Control Center URL |
 | Status | Enabled/Disabled badge |
 | Last Sync | Timestamp of last endpoint sync |
@@ -3790,10 +4221,10 @@ Endpoint protection management via GravityZone API.
 
 | Action | Description |
 |--------|-------------|
-| Add Server | Name, Access URL, API Key (HTTP Basic Auth) |
-| Edit Server | Same fields (API key optional — keeps current if blank) |
+| Add Server | Name, Access URL, API Key (HTTP Basic Auth), Enabled, Default |
+| Edit Server | Same fields (API key optional — keeps current if blank/masked) |
 | Test Connection | Returns: "Connected — N endpoints found" |
-| Sync | Pull endpoint protection data, match to assets |
+| Sync | Pull endpoint protection data, match to assets by hostname |
 | Delete Server | Remove server configuration |
 
 **Sync Results:**
@@ -3801,55 +4232,117 @@ Endpoint protection management via GravityZone API.
 | Metric | Description |
 |--------|-------------|
 | Total Endpoints | Endpoints scanned from GravityZone |
-| Matched to Assets | Endpoints matched to existing asset records |
-| Protection Updated | Endpoint protection status records updated |
-| Unmatched | Endpoints with no matching asset (expandable list of names) |
+| Matched to Assets | Endpoints matched to existing asset records by hostname |
+| Protection Updated | Endpoint protection status records created/updated |
+| Unmatched | Endpoints with no matching asset (expandable list showing names + IPs) |
 
-### 50.13 Tab 11: Module Management
+**API Key Display:** First 8 + `****` + last 4 characters
 
-Dynamic sidebar/navigation module visibility control.
+**Database Model:**
 
-**17 Module Groups (~80+ Sub-Modules):**
+```prisma
+model GravityZoneServer {
+  id         String    @id @default(cuid())
+  name       String
+  accessUrl  String
+  apiKey     String
+  enabled    Boolean   @default(true)
+  isDefault  Boolean   @default(false)
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  @@map("gravityzone_servers")
+}
+```
 
-| # | Group | Key | Sub-Modules |
-|---|-------|-----|-------------|
-| 1 | Risk & Compliance | risk | Risk Register, Risk Assessment, SoA, etc. |
-| 2 | Asset Management | assets | Asset Register, Hardware, Software, Network, etc. |
-| 3 | Documents & Records | documents | Policy Library, Document Templates, etc. |
-| 4 | Incidents & Response | incidents | Incident Tracker, Response Plans, etc. |
-| 5 | Audit & Assurance | audit | Internal Audit, Findings, CAPA, etc. |
-| 6 | HR Security | hr | Employee Records, Background Checks, etc. |
+**Cache Invalidation:** `clearGzConfigCache()` after every mutation.
+
+---
+
+### 50.15 Tab 11: Module Management
+
+Dynamic sidebar/navigation module visibility control for all users.
+
+**18 Module Groups (~120+ Sub-Modules):**
+
+| # | Group | Key | Example Sub-Modules |
+|---|-------|-----|---------------------|
+| 1 | Risk & Compliance | risk | Risk Register, Risk Assessment, SoA, Risk Appetite |
+| 2 | Asset Management | assets | Asset Register, Hardware, Software, OCS Import |
+| 3 | Documents & Records | documents | Policy Library, Document Templates, Record Control |
+| 4 | Incidents & Response | incidents | Incident Tracker, Response Plans, SLA Dashboard |
+| 5 | Audit & Assurance | audit | Internal Audit, Findings, CAPA |
+| 6 | HR Security | hr | Employee Records, Background Checks, Exit Checklists |
 | 7 | Security Training | training | Training Programs, Awareness, Certifications |
-| 8 | Access & Security | access | Access Reviews, Privilege Management, etc. |
+| 8 | Access & Security | access | Access Reviews, Privilege Management, Break Glass |
 | 9 | SDLC & Configuration | sdlc | Secure Development, Code Review, Change Mgmt |
-| 10 | Encryption & Backup | encryption | Key Management, Backup Config, etc. |
-| 11 | Vulnerability Mgmt | vulnerability | Vulnerability Scanner, Patch Management, etc. |
-| 12 | Third Parties | thirdparty | Vendor Assessment, Supplier Contracts, etc. |
+| 10 | Encryption & Backup | encryption | Key Management, Backup Logs, Restoration Tests |
+| 11 | Vulnerability Mgmt | vulnerability | Vulnerability Scanner, Patch Management |
+| 12 | Third Parties | thirdparty | Vendor Assessment, Supplier Contracts |
 | 13 | Physical & Environmental | physical | Facility Security, Environmental Controls |
 | 14 | Business Continuity | bcp | BCP Plans, DR Testing, Impact Analysis |
-| 15 | IT Operations | operations | Capacity Mgmt, Service Level Mgmt, etc. |
+| 15 | IT Operations | operations | Capacity Mgmt, Service Level Mgmt |
 | 16 | Project & Timesheet Mgmt | projects | Project Tracker, Timesheets |
 | 17 | Legacy Systems Archive | legacy | Archived/deprecated modules |
+| 18 | Governance | governance | Management Reviews, ISMS Metrics, Reports |
 
 **Features:**
 
 | Feature | Description |
 |---------|-------------|
-| Group Toggle | Enable/disable entire module group (switch control) |
-| Sub-Module Toggle | Enable/disable individual items within a group |
-| Enable All / Disable All | Bulk toggle buttons |
-| Auto-Save | Changes saved immediately on toggle (no save button needed) |
-| Disabled Group Indicator | Shows italic message when expanding a disabled group |
-| Badge Counter | Shows how many sub-modules are hidden per group |
-| Summary | "N of 17 groups enabled" + hidden sub-module count |
+| Group Toggle | Green/red switch to enable/disable entire module group |
+| Sub-Module Toggle | Individual switches for each item within a group |
+| Expand/Collapse | Click group row to reveal sub-modules with their paths |
+| Enable All / Disable All | Bulk toggle buttons in header |
+| Auto-Save | Changes saved immediately on toggle (no explicit save button) |
+| Badge Counter | Shows how many sub-modules are hidden per disabled group |
+| Summary | "N of 18 groups enabled, M sub-modules hidden" |
 
-**Storage:** `systemConfig` table, key `DISABLED_MODULES`, value: `{ disabledGroups: string[], disabledItems: string[] }`
+**UI Layout:**
 
-### 50.14 Tab 12: Bulk Actions
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Module Management        [Enable All] [Disable All]         │
+│ 16 of 18 groups enabled, 3 sub-modules hidden              │
+├─────────────────────────────────────────────────────────────┤
+│ ▶ Risk & Compliance                              [🟢 ON]   │
+│ ▼ Asset Management                               [🟢 ON]   │
+│   ├─ Assets (/assets)                            [🟢 ON]   │
+│   ├─ OCS Import (/assets/ocs-import)             [🔴 OFF]  │
+│   └─ Endpoint Protection (/endpoint-protection)  [🟢 ON]   │
+│ ▶ Documents & Records                            [🟢 ON]   │
+│ ▶ Incidents & Response                           [🔴 OFF]  │
+│ ...                                                         │
+└─────────────────────────────────────────────────────────────┘
+```
 
-Overview of bulk operation execution history.
+**Database Storage:**
 
-**Stat Cards:**
+```json
+// SystemConfig key: "DISABLED_MODULES"
+{
+  "disabledGroups": ["incidents", "legacy"],
+  "disabledItems": ["/assets/ocs-import", "/encryption-keys"]
+}
+```
+
+**Sidebar Integration:**
+
+```typescript
+// Sidebar reads config and filters out disabled modules
+const disabledConfig = await getSystemConfig("DISABLED_MODULES");
+const { disabledGroups, disabledItems } = JSON.parse(disabledConfig || "{}");
+// Group-level disable overrides individual item toggles
+// Re-enabling a group clears its individual item disables
+```
+
+---
+
+### 50.16 Tab 12: Bulk Actions
+
+Overview of bulk operation execution history — lightweight summary linking to dedicated page.
+
+**Stat Cards (3):**
 
 | Card | Metric |
 |------|--------|
@@ -3866,30 +4359,40 @@ Overview of bulk operation execution history.
 | User | Who ran it |
 | Records | Total records affected |
 
-**Navigation:** "Open Bulk Actions Center" button → `/bulk-actions` page for full CRUD.
+**Navigation:** "Open Bulk Actions Center" button → `/bulk-actions` page for full CRUD of action groups and execution workflows.
 
-### 50.15 Tab 13: Data Management
+---
 
-Bulk data cleanup for assets and policy acknowledgments.
+### 50.17 Tab 13: Data Management
+
+Bulk data cleanup for assets and policy acknowledgments with cascade delete.
 
 **Asset Management Section:**
 
 | Feature | Description |
 |---------|-------------|
 | Search | Filter by name, assetId, type |
-| Asset Table | Asset ID (mono), name, type badge, status badge, source (OCS Import/Manual), created date |
+| Asset Table | Checkbox-selectable: Asset ID (monospace), name, type badge, status badge, source (OCS Import/Manual), created date |
 | Select All | Checkbox for filtered results |
 | Bulk Delete | Delete selected assets with confirmation dialog showing asset list |
 
 **Asset Deletion Cascade:**
-```
-For each asset:
-  1. Delete endpointComplianceLog records
-  2. Delete endpointProtectionStatus records
-  3. Delete evidence records (moduleType: "assets")
-  4. Delete comments
-  5. Nullify vulnerability references
-  6. Delete asset (RiskAsset cascade-deletes automatically)
+
+```typescript
+for (const id of assetIds) {
+  // 1. Delete dependent records first
+  await prisma.endpointComplianceLog.deleteMany({ where: { assetId: id } });
+  await prisma.endpointProtectionStatus.deleteMany({ where: { assetId: id } });
+  await prisma.evidence.deleteMany({ where: { entityId: id, entityType: "Asset" } });
+  await prisma.comment.deleteMany({ where: { entityId: id, entityType: "Asset" } });
+  // 2. Nullify FK references (preserve vulnerabilities, just unlink)
+  await prisma.vulnerability.updateMany({
+    where: { affectedAssetId: id },
+    data: { affectedAssetId: null },
+  });
+  // 3. Delete asset (RiskAsset cascade-deletes automatically via Prisma)
+  await prisma.asset.delete({ where: { id } });
+}
 ```
 
 **Policy Acknowledgments Section:**
@@ -3897,11 +4400,23 @@ For each asset:
 | Feature | Description |
 |---------|-------------|
 | Search | Filter by document title/number, user name/email |
-| Status Filter | All / Pending / Acknowledged / Overdue |
+| Status Filter | Dropdown: All / Pending / Acknowledged / Overdue |
 | Summary Stats | Total, Pending, Acknowledged, Overdue counts |
-| Acknowledgment Table | Document number + title, user + email, status badge, date |
-| Delete Selected | Bulk delete selected acknowledgments |
+| Acknowledgment Table | Checkbox-selectable: Document number + title, user + email, status badge, date |
+| Delete Selected | Bulk delete selected acknowledgments + cascade notifications |
 | Delete All | Pre-go-live cleanup — deletes all acknowledgments + related notifications |
+
+**Acknowledgment Deletion Cascade:**
+
+```typescript
+for (const id of ackIds) {
+  // Delete notifications that contain acknowledge links
+  await prisma.notification.deleteMany({
+    where: { link: { contains: id } },
+  });
+  await prisma.policyAcknowledgment.delete({ where: { id } });
+}
+```
 
 **Confirmation Safety:**
 
@@ -3911,9 +4426,9 @@ For each asset:
 | Delete Acknowledgments | `CONFIRM_DELETE_ACKNOWLEDGMENTS` |
 | Delete All Audit Logs | `CONFIRM_DELETE_ALL_LOGS` |
 
-### 50.16 API Route Summary (Implemented)
+---
 
-**GET Sections:**
+### 50.18 GET API Sections Summary
 
 | Section Parameter | Returns |
 |-------------------|---------|
@@ -3931,46 +4446,376 @@ For each asset:
 | `backups_list` | S3 backup file list with sizes and dates |
 | _(no section)_ | Full refresh — all 5 core sections in parallel |
 
-**POST Actions:**
+### 50.19 POST Actions Summary
 
 | Action | Confirmation | Description |
 |--------|-------------|-------------|
-| `backup` | `CONFIRM_BACKUP` | Full pg_dump → download as .sql |
-| `backup_to_s3` | — | Automated S3 backup with retention |
+| `backup` | `CONFIRM_BACKUP` | Full pg_dump → download as .sql file |
+| `backup_to_s3` | — | Automated S3 backup with 7-day retention |
 | `purge_audit_logs` | `CONFIRM_PURGE` | Delete logs older than N days |
-| `unlock_user` | — | Reset lockout for user |
+| `unlock_user` | — | Reset lockout: failedLoginAttempts=0, lockedUntil=null |
 | `deactivate_user` | `CONFIRM_DEACTIVATE` | Set user isActive=false |
-| `save_ai_key` | — | Save AI provider + API key + model |
+| `save_ai_key` | — | Save AI provider + API key + model to SystemConfig |
 | `test_ai_key` | — | Test AI API connectivity |
-| `delete_ai_key` | — | Remove AI configuration |
+| `delete_ai_key` | — | Remove AI configuration from SystemConfig |
 | `save_storage_config` | — | Save S3/MinIO config + auto-create bucket |
-| `test_storage_connection` | — | Test S3 connectivity |
-| `delete_storage_config` | — | Remove S3 config, revert to local |
-| `migrate_to_s3` | — | Migrate local files to S3 |
-| `save_ocs_server` | — | Create/update OCS server |
-| `test_ocs_server` | — | Test OCS API connectivity |
-| `delete_ocs_server` | — | Delete OCS server (unlink assets) |
-| `save_gz_server` | — | Create/update GravityZone server |
+| `test_storage_connection` | — | Test S3 connectivity and bucket access |
+| `delete_storage_config` | — | Remove S3 config, revert to local disk |
+| `migrate_to_s3` | — | Migrate all local evidence files to S3 |
+| `save_ocs_server` | — | Create/update OCS server record |
+| `test_ocs_server` | — | Test OCS API connectivity (returns computer count) |
+| `delete_ocs_server` | — | Delete OCS server (unlinks but preserves assets) |
+| `save_gz_server` | — | Create/update GravityZone server record |
 | `test_gz_server` | — | Test GravityZone API connectivity |
-| `delete_gz_server` | — | Delete GravityZone server |
+| `delete_gz_server` | — | Delete GravityZone server record |
 | `bulk_delete_assets` | `CONFIRM_DELETE_ASSETS` | Cascade-delete selected assets |
-| `bulk_delete_acknowledgments` | `CONFIRM_DELETE_ACKNOWLEDGMENTS` | Delete selected/all acknowledgments |
+| `bulk_delete_acknowledgments` | `CONFIRM_DELETE_ACKNOWLEDGMENTS` | Delete selected/all acknowledgments + notifications |
 | `delete_audit_logs` | `CONFIRM_DELETE_LOGS` | Delete selected audit log entries |
 | `delete_all_audit_logs` | `CONFIRM_DELETE_ALL_LOGS` | Wipe all audit logs |
 | `save_module_toggles` | — | Save disabled module groups/items |
 
-### 50.17 Key Implementation Patterns
+---
 
-| Pattern | Implementation |
-|---------|---------------|
-| Server-Side Initial Load | `Promise.all()` of 5 queries in page.tsx (SSR) |
-| Client-Side Refresh | Per-tab fetch via `?section=` parameter |
-| Tab Persistence | Active tab saved in `localStorage` |
-| Collapsible Cards | Open/closed state persisted in `localStorage` per card |
-| Confirmation Safety | Multi-tier: dialog → typed confirmation → API confirmation code |
-| Secret Masking | API keys/passwords masked in responses (first N + `****` + last N) |
-| Cache Invalidation | `clearXxxCache()` called after every config change |
-| Error Handling | All actions return `{ success, errors[] }` for partial failure reporting |
+### 50.20 Reusable UI Patterns
+
+#### Pattern 1: StatCard Component
+
+KPI card used across System Health, Database, Users, and Audit tabs.
+
+```typescript
+interface StatCardProps {
+  title: string;       // "Total Users"
+  value: string;       // "60"
+  subtitle?: string;   // "2 inactive"
+  icon: LucideIcon;    // Users icon
+}
+
+function StatCard({ title, value, subtitle, icon: Icon }: StatCardProps) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
+            <Icon className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">{title}</p>
+            <p className="text-2xl font-bold">{value}</p>
+            {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+#### Pattern 2: CollapsibleCard with localStorage Persistence
+
+```typescript
+interface CollapsibleCardProps {
+  title: string;
+  icon?: LucideIcon;
+  description?: string;
+  headerActions?: React.ReactNode;
+  storageKey: string;         // prefixed "sa-" in localStorage
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}
+
+function CollapsibleCard({ title, storageKey, children, ... }: CollapsibleCardProps) {
+  const [open, setOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(`sa-${storageKey}`) !== "false";
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem(`sa-${storageKey}`, String(open));
+  }, [open, storageKey]);
+
+  return (
+    <Card>
+      <CardHeader onClick={() => setOpen(!open)} className="cursor-pointer">
+        <div className="flex items-center justify-between">
+          <CardTitle>{title}</CardTitle>
+          {open ? <ChevronUp /> : <ChevronDown />}
+        </div>
+      </CardHeader>
+      {open && <CardContent>{children}</CardContent>}
+    </Card>
+  );
+}
+```
+
+#### Pattern 3: Three-Tier Confirmation System
+
+```
+Level 1 — Simple confirm dialog:
+  Dialog → "Are you sure?" → [Cancel] [Confirm]
+  Used for: Unlock user
+
+Level 2 — String confirmation in API payload:
+  Dialog → [Cancel] [Confirm]
+  Client sends: { ...data, confirm: "CONFIRM_BACKUP" }
+  Server rejects if confirm string doesn't match
+  Used for: Backup, deactivate, delete assets/acks
+
+Level 3 — Type-to-confirm:
+  Dialog → "Type DELETE ALL to confirm: [________]"
+  Button disabled until typed string matches exactly
+  API payload: { ...data, confirm: "CONFIRM_DELETE_ALL_LOGS" }
+  Used for: Delete ALL audit logs (nuclear option)
+```
+
+#### Pattern 4: Secret Masking
+
+```typescript
+// Display secrets: show first N + dots + last N
+function maskSecret(value: string): string {
+  if (!value || value.length < 12) return "****";
+  return value.slice(0, 4) + "........" + value.slice(-4);
+}
+
+// API keys: first 8 + **** + last 4
+function maskApiKey(key: string): string {
+  return key.slice(0, 8) + "****" + key.slice(-4);
+}
+
+// Edit forms: only update if user typed new value (not the mask)
+if (body.password && !body.password.includes("****")) {
+  updateData.password = body.password;
+}
+
+// Show/hide toggle on input
+<Input type={showPassword ? "text" : "password"} />
+<Button onClick={() => setShowPassword(!show)}>
+  {showPassword ? <EyeOff /> : <Eye />}
+</Button>
+```
+
+#### Pattern 5: Tab State Persistence
+
+```typescript
+const [activeTab, setActiveTab] = useState<TabId>(() => {
+  if (typeof window !== "undefined") {
+    return (localStorage.getItem("superadmin-tab") as TabId) || "health";
+  }
+  return "health";
+});
+
+useEffect(() => {
+  localStorage.setItem("superadmin-tab", activeTab);
+}, [activeTab]);
+```
+
+#### Pattern 6: Per-Tab Refresh
+
+```typescript
+const refreshData = useCallback(async (section?: string) => {
+  setRefreshing(true);
+  const url = section
+    ? `/api/admin/superadmin?section=${section}`
+    : "/api/admin/superadmin";
+  const res = await fetch(url);
+  if (res.ok) {
+    const json = await res.json();
+    if (section) {
+      setData(prev => ({ ...prev, [section]: json }));
+    } else {
+      setData(json);
+    }
+  }
+  setRefreshing(false);
+}, []);
+```
+
+#### Pattern 7: Cache Clearing After Config Changes
+
+```typescript
+// Each integration has an in-memory cache for performance.
+// After any config mutation, clear the relevant cache:
+
+import { clearApiKeyCache } from "@/lib/cloudflare-ai";         // AI chatbot
+import { clearStorageConfigCache } from "@/lib/storage";         // S3 storage
+import { clearOcsConfigCache } from "@/lib/ocs-client";          // OCS Inventory
+import { clearGzConfigCache } from "@/lib/gravityzone-client";   // GravityZone
+```
+
+---
+
+### 50.21 Database Models Required
+
+```prisma
+// Key-value configuration store — backbone for 4+ tabs
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique    // AI_PROVIDER, S3_ENDPOINT, DISABLED_MODULES, etc.
+  value     String              // JSON or plaintext
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("system_config")
+}
+
+// Audit trail for all user actions — feeds 2 tabs
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  userName   String?
+  userEmail  String?
+  action     String   // CREATE, UPDATE, DELETE, LOGIN, LOGIN_FAILED, LOGOUT, SUPERADMIN_ACCESS, etc.
+  entityType String?  // Module name: "Risk", "Asset", "Document"
+  entityId   String?
+  entityLabel String? // Human-readable: "RISK-001: Data Breach"
+  details    String?  // JSON with before/after values
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
+
+// User page view tracking — feeds User Activity tab
+model PageView {
+  id        String   @id @default(cuid())
+  userId    String
+  path      String
+  title     String?
+  duration  Int?     // seconds
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  @@map("page_views")
+}
+
+// API token for external access (Bearer auth)
+model ApiToken {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  tokenHash   String    @unique  // SHA-256 hash (never store plaintext)
+  scopes      String[]
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+// OCS Inventory server configuration
+model OcsServer {
+  id        String   @id @default(cuid())
+  name      String
+  apiUrl    String
+  username  String
+  password  String
+  enabled   Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  assets    Asset[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("ocs_servers")
+}
+
+// Bitdefender GravityZone server configuration
+model GravityZoneServer {
+  id         String    @id @default(cuid())
+  name       String
+  accessUrl  String
+  apiKey     String
+  enabled    Boolean   @default(true)
+  isDefault  Boolean   @default(false)
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  @@map("gravityzone_servers")
+}
+```
+
+**User Model Fields (required for Users & Security tab):**
+
+```prisma
+model User {
+  // ... existing fields ...
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  isActive            Boolean   @default(true)
+  lastLoginAt         DateTime?
+  role                String    @default("VIEWER") // ADMIN, RISK_OWNER, AUDITOR, VIEWER
+  department          String?
+}
+```
+
+---
+
+### 50.22 File Structure for Replication
+
+```
+src/
+├── app/
+│   ├── (dashboard)/
+│   │   └── superadmin-lala/              # Stealth admin page
+│   │       └── page.tsx                  # Server component (~43 lines)
+│   └── api/
+│       ├── admin/
+│       │   └── superadmin/
+│       │       └── route.ts              # Unified GET/POST handler (~793 lines)
+│       └── user/
+│           └── activity/
+│               └── route.ts              # Page view tracking API (~83 lines)
+├── components/
+│   └── superadmin/
+│       └── superadmin-dashboard.tsx       # Client component (~4,172 lines)
+├── lib/
+│   ├── superadmin-queries.ts             # Server-side data fetchers (~510 lines)
+│   ├── api-auth.ts                       # Dual auth: session + Bearer token (~109 lines)
+│   ├── db-backup.ts                      # S3 backup: pg_dump → gzip → upload
+│   ├── storage.ts                        # S3 config management + cache
+│   ├── ocs-client.ts                     # OCS Inventory REST client + cache
+│   ├── gravityzone-client.ts             # GravityZone JSON-RPC 2.0 client + cache
+│   ├── cloudflare-ai.ts                  # Multi-provider AI client + cache
+│   └── audit-log.ts                      # Audit trail utility
+└── generated/
+    └── prisma/
+        └── client/                        # Generated Prisma client
+```
+
+**npm Dependencies:**
+
+```json
+{
+  "@aws-sdk/client-s3": "^3.x",        // S3 storage + backup
+  "pdfkit": "^0.x",                      // PDF generation (certificates, reports)
+  "exceljs": "^4.x",                    // Excel export
+  "node-cron": "^3.x",                  // Scheduled tasks (daily backup, overdue check)
+  "nodemailer": "^6.x",                 // Email sending (SMTP)
+  "lucide-react": "^0.x",              // Icons
+  "next-themes": "^0.x"                // Dark mode support
+}
+```
+
+---
+
+### 50.23 Quick Start Checklist for Replication
+
+| # | Task | Priority | Tab(s) Affected |
+|---|------|----------|-----------------|
+| 1 | Create `SystemConfig` model (key-value store) | Critical | 7, 8, 11 |
+| 2 | Create `AuditLog` model | Critical | 3, 5 |
+| 3 | Create `PageView` model | High | 4 |
+| 4 | Add security fields to User model (`failedLoginAttempts`, `lockedUntil`, `isActive`, `lastLoginAt`) | Critical | 3 |
+| 5 | Build unified API route (single file, `section` GET + `action` POST dispatch) | Critical | All |
+| 6 | Build 5 server-side query functions (`getSystemHealth`, `getDatabaseStats`, `getUserSecurity`, `getAuditAnalytics`, `getEnvironmentConfig`) | Critical | 1, 2, 3, 5, 6 |
+| 7 | Build server component page (auth check + parallel fetch + pass to client) | Critical | — |
+| 8 | Build client dashboard (13 tab sub-components, ~4K lines) | Critical | All |
+| 9 | Implement `StatCard` and `CollapsibleCard` reusable components | High | All |
+| 10 | Implement 3-tier confirmation dialogs | High | 2, 3, 5, 13 |
+| 11 | Implement secret masking (`maskSecret`, `maskApiKey`) | High | 6, 7, 8, 9, 10 |
+| 12 | Implement cache clearing pattern for each integration | High | 7, 8, 9, 10 |
+| 13 | Set up stealth route (no sidebar link, ADMIN-only redirect) | Medium | — |
+| 14 | Add tab state persistence in localStorage | Medium | — |
+| 15 | Create `OcsServer` model (if applicable) | Optional | 9 |
+| 16 | Create `GravityZoneServer` model (if applicable) | Optional | 10 |
+| 17 | Create `ApiToken` model for Bearer auth support | Optional | — |
+| 18 | Build page view tracking (client hook + API route) | Medium | 4 |
 
 ---
 
@@ -3979,5 +4824,4 @@ For each asset:
 > This document covers 50 sections with 130+ implementation items across 13 categories.
 > Use the master checklist (Section 45) to track core implementation progress.
 > Sections 46-49 cover additional security hardening, compliance, and future roadmap.
-> Section 50 documents the live EHS SuperAdmin implementation as a reference.
-> Replace all `{PLACEHOLDER}` values before deploying to a specific project.
+> Section 50 documents the live EHS SuperAdmin implementation as a comprehensive reference for replication.
